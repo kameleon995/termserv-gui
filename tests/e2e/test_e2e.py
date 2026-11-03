@@ -271,3 +271,13 @@ def test_ondemand_port_only_open_while_connected(stack):
     assert holders("/dev/port2")
     detach(c)
     assert wait_for(lambda: not holders("/dev/port2")), "ondemand port not closed after last user left"
+
+
+def test_banner_tells_user_to_give_a_username(stack):
+    # what a user sees after `ssh -p 2001 host` from a machine whose local user doesn't exist here
+    cmd = ssh("alice", 2001)
+    cmd[cmd.index("LogLevel=ERROR")] = "LogLevel=INFO"  # ssh's default; ERROR hides banners
+    cmd[cmd.index("alice@127.0.0.1")] = "nosuchuser@127.0.0.1"
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    assert r.returncode == 255
+    assert "ssh <username>@" in r.stderr and "login will fail" in r.stderr

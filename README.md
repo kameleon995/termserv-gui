@@ -152,4 +152,8 @@ sudo TERMSERV_E2E=1 python3 -m pytest -v tests/e2e
 - Restarting `termserv-sshd` after a config change keeps open serial sessions
   (`KillMode=process`).
 - With no ports enabled, `termserv-sshd` is stopped instead of falling back to port 22.
+- Always connect as `ssh <username>@host -p 200N`. Without `<username>@`, ssh sends
+  your local username and the login fails. A pre-login banner
+  (`/etc/termserv/banner`, written by `apply`) says so. The client hides banners
+  when run with `-q` or `LogLevel=ERROR`.
 - Ubuntu's `pam_motd` may still print the message of the day on connect.

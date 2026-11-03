@@ -23,7 +23,7 @@ def env(tmp_path, monkeypatch):
     (tmp_path / "ports.yaml").write_text(PORTS)
     store = service.Store(tmp_path / "ports.yaml", applymod.Paths(
         conserver_cf=tmp_path / "conserver.cf", sshd_config=tmp_path / "sshd_config",
-        udev_rules=tmp_path / "99-termserv.rules"))
+        udev_rules=tmp_path / "99-termserv.rules", banner=tmp_path / "banner"))
     monkeypatch.setattr(service, "is_admin", lambda cfg, user: user == "boss")
     monkeypatch.setattr(service, "group_members", lambda g: {"boss"} if g == "serial" else set())
     monkeypatch.setattr(service, "login_users", lambda: ["boss", "eve"])

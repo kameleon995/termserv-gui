@@ -184,7 +184,7 @@ def pending_changes(store: Store) -> list[str]:
         return ["ports.yaml (invalid)"]
     wanted = {
         store.paths.conserver_cf: render.conserver_cf(cfg, model.released_ports()),
-        store.paths.sshd_config: render.sshd_config(cfg),
+        store.paths.sshd_config: render.sshd_config(cfg, banner_path=str(store.paths.banner)),
         store.paths.udev_rules: render.udev_rules(cfg),
     }
     changed = []

@@ -20,7 +20,7 @@ def store(tmp_path, monkeypatch):
     (tmp_path / "ports.yaml").write_text(PORTS)
     return service.Store(tmp_path / "ports.yaml", applymod.Paths(
         conserver_cf=tmp_path / "conserver.cf", sshd_config=tmp_path / "sshd_config",
-        udev_rules=tmp_path / "99-termserv.rules"))
+        udev_rules=tmp_path / "99-termserv.rules", banner=tmp_path / "banner"))
 
 
 def run(coro):
