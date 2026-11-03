@@ -97,7 +97,7 @@ See [examples/ports.yaml](examples/ports.yaml). SSH port = `base_port + number`.
 | `number` | port number N (SSH port 2000+N, conserver console `portN`) |
 | `name` | optional alias, e.g. `router1` |
 | `usb_path` | udev `ID_PATH` of the USB socket; generates a `/dev/portN` symlink, so a port is a physical socket |
-| `device` | explicit device path instead (default `/dev/portN`) |
+| `device` | explicit device path for ports not on a USB socket (ignored when `usb_path` is set) |
 | `baud`, `parity` | line settings (8 data bits, 1 stop bit) |
 | `groups` | Linux groups allowed on this port (default: `settings.ssh_group`) |
 | `enabled` | `false` closes the SSH port and drops the console |

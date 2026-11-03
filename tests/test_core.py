@@ -218,3 +218,39 @@ def test_cli_ondemand_flag(tmp_path):
     assert model.load(f).port(1).ondemand is True
     assert cli.main(["-f", f, "set", "1", "--no-ondemand"]) == 0
     assert model.load(f).port(1).ondemand is False
+
+
+def test_usb_socket_wins_over_device():
+    p = model.Port(number=3, device="/dev/ttyUSB0", usb_path="platform-3610000.usb-usb-0:2.1:1.0")
+    assert p.device_path() == "/dev/port3"
+
+
+def test_same_usb_socket_on_two_ports_rejected():
+    path = "platform-3610000.usb-usb-0:2.1:1.0"
+    cfg = model.Config(ports=[model.Port(number=1, usb_path=path), model.Port(number=2, usb_path=path)])
+    with pytest.raises(model.ConfigError, match="already used by port 1"):
+        cfg.validate()
+
+
+def test_usb_socket_label():
+    from termserv.discover import usb_socket_label
+
+    assert usb_socket_label("platform-3610000.usb-usb-0:2.1:1.0") == "USB 2.1"
+    assert usb_socket_label("pci-0000:00:14.0-usb-0:3:1.0") == "USB 3"
+    assert usb_socket_label("platform-xhci-hcd.0-usbv2-0:1.2:1.1") == "USB 1.2 #1"
+    assert usb_socket_label("odd") == "odd"
+
+
+def test_socket_choices(monkeypatch):
+    from termserv import discover, service
+
+    a, b = "platform-x.usb-usb-0:2.1:1.0", "platform-x.usb-usb-0:2.4:1.0"
+    monkeypatch.setattr(discover, "usb_serial_devices", lambda: [
+        discover.SerialDevice("/dev/ttyUSB0", a, model="FT232", serial="A1"),
+        discover.SerialDevice("/dev/ttyUSB1", b, model="FT232", serial="B2"),
+    ])
+    cfg = model.Config(ports=[model.Port(number=1, usb_path=a), model.Port(number=2, usb_path="platform-x.usb-usb-0:2.3:1.0")])
+    by_path = {c.id_path: c for c in service.socket_choices(cfg, for_port=2, current=cfg.port(2).usb_path)}
+    assert by_path[a].used_by == 1  # port 1 owns USB 2.1
+    assert by_path[b].used_by is None and "ttyUSB1 · FT232 · B2" in by_path[b].label
+    assert not by_path["platform-x.usb-usb-0:2.3:1.0"].connected  # current socket, nothing plugged in

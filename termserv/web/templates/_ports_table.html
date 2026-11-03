@@ -4,7 +4,7 @@
 <div class="table-wrap">
 <table class="ports">
   <thead>
-    <tr><th>Port</th><th>SSH</th><th>Name</th><th>Device</th><th>Line</th><th>Access</th><th>State</th><th>Connected</th><th></th></tr>
+    <tr><th>Port</th><th>SSH</th><th>Name</th><th>Adapter</th><th>Line</th><th>Access</th><th>State</th><th>Connected</th><th></th></tr>
   </thead>
   <tbody>
   {% for v in views %}
@@ -13,8 +13,9 @@
       <td><code>{{ v.ssh_port }}</code></td>
       <td>{{ v.port.name or '—' }}</td>
       <td>
-        <code>{{ v.port.device_path() }}</code>
-        {% if not v.device_present and v.state != 'disabled' %}<span class="badge bad" title="Device file not found: adapter unplugged or wrong USB path">missing</span>{% endif %}
+        {% if v.socket %}<span title="{{ v.port.usb_path }}">{{ v.socket }}</span>{% if v.tty %} <span class="muted">→ {{ v.tty }}</span>{% endif %}
+        {% else %}<code>{{ v.port.device_path() }}</code>{% endif %}
+        {% if not v.device_present and v.state != 'disabled' %}<span class="badge bad" title="Device file not found: adapter unplugged or wrong USB socket">{{ 'empty socket' if v.socket else 'missing' }}</span>{% endif %}
       </td>
       <td>{{ v.port.baud }} 8{{ v.port.parity[0] | upper }}1{% if v.port.ondemand %} <span class="badge muted" title="Device is opened only while someone is connected">on demand</span>{% endif %}</td>
       <td>{{ v.port.groups | join(', ') if v.port.groups else cfg.settings.ssh_group }}</td>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 
@@ -15,6 +16,28 @@ class SerialDevice:
     vendor: str = ""
     model: str = ""
     serial: str = ""
+
+    @property
+    def socket(self) -> str:
+        return usb_socket_label(self.id_path)
+
+
+_SOCKET_RE = re.compile(r"usb(?:v\d+)?-\d+:([\d.]+):\d+\.(\d+)$")
+
+
+def usb_socket_label(id_path: str) -> str:
+    """Short name for a USB socket from its udev ID_PATH.
+
+    "platform-3610000.usb-usb-0:2.1:1.0" -> "USB 2.1" (hub port chain 2 then 1).
+    Interface numbers above 0 (multi-port adapters) are shown too: "USB 2.4 #1".
+    """
+    m = _SOCKET_RE.search(id_path or "")
+    if not m:
+        return id_path or ""
+    label = f"USB {m.group(1)}"
+    if m.group(2) != "0":
+        label += f" #{m.group(2)}"
+    return label
 
 
 def _udev_props(node: str) -> dict[str, str]:

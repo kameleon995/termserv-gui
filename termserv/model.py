@@ -49,6 +49,10 @@ class Port:
         return f"port{self.number}"
 
     def device_path(self) -> str:
+        # A USB socket wins over a typed device path: the udev rule makes /dev/portN
+        # point at whatever adapter is in that socket.
+        if self.usb_path:
+            return f"/dev/port{self.number}"
         return self.device or f"/dev/port{self.number}"
 
 
@@ -95,6 +99,7 @@ class Config:
 
         seen_numbers: set[int] = set()
         seen_names: set[str] = set()
+        seen_usb: dict[str, int] = {}
         for p in self.ports:
             where = f"port {p.number}"
             if not isinstance(p.number, int) or not (1 <= p.number <= 512):
@@ -121,6 +126,10 @@ class Config:
                     errors.append(f"{where}: group {g!r} is not a valid group name")
             if p.usb_path and not USB_PATH_RE.match(p.usb_path):
                 errors.append(f"{where}: usb_path {p.usb_path!r} has invalid characters")
+            if p.usb_path:
+                if p.usb_path in seen_usb:
+                    errors.append(f"{where}: USB socket already used by port {seen_usb[p.usb_path]}")
+                seen_usb.setdefault(p.usb_path, p.number)
             if s.base_port + p.number > 65535:
                 errors.append(f"{where}: SSH port {s.base_port + p.number} exceeds 65535")
         if errors:

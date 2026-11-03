@@ -15,7 +15,7 @@ from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Checkbox, DataTable, Footer, Header, Input, Label, RichLog, Select, Static
 
-from . import __version__, discover, model, service
+from . import __version__, model, service
 from .apply import ApplyError
 
 STATE_STYLE = {"up": "green", "down": "red", "released": "cyan", "disabled": "dim", "idle": "dim", "unknown": "yellow"}
@@ -48,7 +48,7 @@ class PortForm(ModalScreen[bool]):
         super().__init__()
         self.store, self.port, self.is_new = store, port, is_new
         self.original = None if is_new else port.number
-        self.devices = discover.usb_serial_devices()
+        self.sockets = service.socket_choices(store.load(), None if is_new else port.number, port.usb_path)
 
     def compose(self) -> ComposeResult:
         p = self.port
@@ -60,10 +60,9 @@ class PortForm(ModalScreen[bool]):
                 yield Input(str(p.number), id="number", type="integer", compact=True)
                 yield Label("Name")
                 yield Input(p.name, id="name", placeholder="router1", compact=True)
-                yield Label("USB adapter")
-                options = [(f"{d.node}  {d.id_path}  {d.model}", d.id_path) for d in self.devices if d.id_path]
-                if p.usb_path and p.usb_path not in [v for _, v in options]:
-                    options.insert(0, (f"(not connected)  {p.usb_path}", p.usb_path))
+                yield Label("USB socket")
+                options = [(c.label + (f"  (used by port {c.used_by})" if c.used_by else ""), c.id_path)
+                           for c in self.sockets]
                 yield Select(options, id="usb_path", prompt="none (use device path)",
                              value=p.usb_path if p.usb_path else Select.NULL, compact=True)
                 yield Label("Device path")
@@ -232,7 +231,7 @@ class TermservTUI(App):
     def on_mount(self) -> None:
         self.sub_title = f"v{__version__}"
         table = self.query_one("#ports", DataTable)
-        table.add_columns("Port", "SSH", "Name", "Device", "Line", "Access", "State", "Connected")
+        table.add_columns("Port", "SSH", "Name", "Adapter", "Line", "Access", "State", "Connected")
         self.action_refresh()
         self.set_interval(5, self.action_refresh)
 
@@ -250,7 +249,9 @@ class TermservTUI(App):
         table.clear()
         for v in self.views:
             p = v.port
-            device = p.device_path() + ("" if v.device_present or v.state == "disabled" else "  [red]missing[/]")
+            device = (f"{v.socket}" + (f" → {v.tty}" if v.tty else "")) if v.socket else p.device_path()
+            if not v.device_present and v.state != "disabled":
+                device += "  [red]empty socket[/]" if v.socket else "  [red]missing[/]"
             line = f"{p.baud} 8{p.parity[0].upper()}1" + ("  on demand" if p.ondemand else "")
             state = f"[{STATE_STYLE.get(v.state, '')}]{v.state}[/]"
             table.add_row(str(p.number), str(v.ssh_port), p.name or "-", device, line,

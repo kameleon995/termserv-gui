@@ -45,6 +45,8 @@ class PortView:
     state: str  # up | down | idle | released | disabled | unknown
     users: list[str] = field(default_factory=list)
     device_present: bool = False
+    socket: str = ""  # "USB 2.1" when the port follows a USB socket
+    tty: str = ""  # adapter currently behind the port, e.g. "ttyUSB0"
 
     @property
     def number(self) -> int:
@@ -74,8 +76,39 @@ def port_views(cfg: model.Config, live: bool = True) -> list[PortView]:
             state=state,
             users=st.users if st else [],
             device_present=os.path.exists(p.device_path()),
+            socket=discover.usb_socket_label(p.usb_path) if p.usb_path else "",
+            tty=_tty_behind(p.device_path()),
         ))
     return views
+
+
+def _tty_behind(path: str) -> str:
+    real = os.path.realpath(path)
+    return os.path.basename(real) if real != path and os.path.exists(real) else ""
+
+
+@dataclass
+class SocketChoice:
+    id_path: str
+    label: str  # what the dropdown shows
+    used_by: int | None = None  # another port already on this socket
+    connected: bool = True
+
+
+def socket_choices(cfg: model.Config, for_port: int | None = None, current: str = "") -> list[SocketChoice]:
+    """Dropdown entries for picking a USB socket: connected adapters first, plus the
+    port's current socket if nothing is plugged into it right now."""
+    used = {p.usb_path: p.number for p in cfg.ports if p.usb_path and p.number != for_port}
+    choices = []
+    for d in discover.usb_serial_devices():
+        if not d.id_path:
+            continue
+        desc = " · ".join(x for x in (os.path.basename(d.node), d.model or d.vendor, d.serial) if x)
+        choices.append(SocketChoice(d.id_path, f"{d.socket} — {desc}", used.get(d.id_path)))
+    if current and current not in {c.id_path for c in choices}:
+        choices.insert(0, SocketChoice(current, f"{discover.usb_socket_label(current)} — nothing plugged in now",
+                                       used.get(current), connected=False))
+    return sorted(choices, key=lambda c: c.label)
 
 
 def save_port(store: Store, data: dict, original_number: int | None = None) -> model.Config:

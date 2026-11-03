@@ -4,7 +4,8 @@
 <section class="card narrow">
   <h1>Log in</h1>
   <p class="muted">Use your Linux account on this console server.</p>
-  <form method="post" action="/login" class="form">
+  <form method="post" action="/login" class="form"
+        onsubmit="const b = this.querySelector('button'); b.disabled = true; b.textContent = 'Logging in…';">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label>User <input name="username" autocomplete="username" required autofocus></label>
     <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
