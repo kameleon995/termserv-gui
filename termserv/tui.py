@@ -167,6 +167,61 @@ class PortForm(ArrowNavigation, ModalScreen[bool]):
         self.dismiss(True)
 
 
+class SettingsForm(ArrowNavigation, ModalScreen[list]):
+    """Web UI / Cockpit on-off and web login limits. Dismisses with the change log
+    (a list) when saved, None when cancelled."""
+
+    BINDINGS = [*ArrowNavigation.NAV_BINDINGS]
+
+    def __init__(self, store: service.Store) -> None:
+        super().__init__()
+        self.store = store
+
+    def compose(self) -> ComposeResult:
+        s = self.store.load().settings
+        st = service.frontend_status(self.store)
+        with VerticalScroll(classes="dialog form"):
+            yield Label("[b]Settings[/b]")
+            yield Checkbox(f"Web UI (https://{discover.primary_ip()}:{s.web_port})", s.web_enabled,
+                           id="web_enabled", compact=True)
+            yield Checkbox("Cockpit plugin" + ("" if st.cockpit_installed else "  (Cockpit not installed)"),
+                           s.cockpit_enabled, id="cockpit_enabled", compact=True)
+            yield Static("Web UI login", classes="hint section")
+            with Grid(classes="fields"):
+                yield Label("Idle timeout (min)")
+                yield Input(str(s.web_idle_minutes), id="web_idle_minutes", type="integer", compact=True)
+                yield Label("Failed tries")
+                yield Input(str(s.web_max_failures), id="web_max_failures", type="integer", compact=True)
+                yield Label("Lockout (min)")
+                yield Input(str(s.web_lockout_minutes), id="web_lockout_minutes", type="integer", compact=True)
+            yield Static("Changes take effect at once. The web UI keeps open sessions. "
+                         "Cockpit has its own login and idle timeout (/etc/cockpit/cockpit.conf).",
+                         classes="hint")
+            yield Static("", id="error", classes="error")
+            with Horizontal(classes="buttons"):
+                yield Button("Save", id="save", variant="primary")
+                yield Button("Cancel", id="cancel")
+
+    @on(Button.Pressed, "#cancel")
+    def cancel(self) -> None:
+        self.dismiss(None)
+
+    def key_escape(self) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#save")
+    def save(self) -> None:
+        data = {k: self.query_one(f"#{k}", Checkbox).value for k in ("web_enabled", "cockpit_enabled")}
+        data |= {k: self.query_one(f"#{k}", Input).value
+                 for k in ("web_idle_minutes", "web_max_failures", "web_lockout_minutes")}
+        try:
+            log = service.save_settings(self.store, data)
+        except model.ConfigError as e:
+            self.query_one("#error", Static).update(str(e))
+            return
+        self.dismiss(log)
+
+
 class LogScreen(Screen):
     BINDINGS = [Binding("escape,q", "app.pop_screen", "Back")]
 
@@ -257,7 +312,8 @@ class TermservTUI(App):
     #status.pending { background: $warning 30%; }
     .hint { padding: 0 1; color: $text-muted; }
     .dialog { width: 90; max-width: 95%; height: auto; max-height: 90%; padding: 1 2; border: thick $primary; background: $surface; }
-    Confirm, PortForm { align: center middle; }
+    Confirm, PortForm, SettingsForm { align: center middle; }
+    .section { margin-top: 1; }
     .fields { grid-size: 2; grid-columns: 18 1fr; grid-rows: 1; grid-gutter: 1 1; height: auto; margin: 1 0; }
     .fields Input, .fields Select { background: $boost; }
     .buttons { height: auto; margin-top: 1; }
@@ -272,6 +328,7 @@ class TermservTUI(App):
         Binding("r", "release", "Release/grab"),
         Binding("l", "log", "Log"),
         Binding("u", "users", "Users"),
+        Binding("s", "settings", "Settings"),
         Binding("p", "apply", "Apply"),
         Binding("f5", "refresh", "Refresh", show=False),
         Binding("q", "quit", "Quit"),
@@ -402,6 +459,13 @@ class TermservTUI(App):
 
     def action_users(self) -> None:
         self.push_screen(UsersScreen(self.store))
+
+    def action_settings(self) -> None:
+        def done(log: list | None) -> None:
+            if log is not None:
+                self.notify("Settings saved" + (": " + "; ".join(log) if log else ""), timeout=6)
+
+        self.push_screen(SettingsForm(self.store), done)
 
 
 def main(argv: list[str] | None = None) -> int:

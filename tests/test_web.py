@@ -23,7 +23,8 @@ def env(tmp_path, monkeypatch):
     (tmp_path / "ports.yaml").write_text(PORTS)
     store = service.Store(tmp_path / "ports.yaml", applymod.Paths(
         conserver_cf=tmp_path / "conserver.cf", sshd_config=tmp_path / "sshd_config",
-        udev_rules=tmp_path / "99-termserv.rules", banner=tmp_path / "banner"))
+        udev_rules=tmp_path / "99-termserv.rules", banner=tmp_path / "banner",
+        cockpit_dir=tmp_path / "cockpit"))
     monkeypatch.setattr(service, "is_admin", lambda cfg, user: user == "boss")
     monkeypatch.setattr(service, "group_members", lambda g: {"boss"} if g == "serial" else set())
     monkeypatch.setattr(service, "login_users", lambda: ["boss", "eve"])
@@ -279,3 +280,17 @@ def test_connect_hint_shows_ip_not_hostname(env, monkeypatch):
     page = client.get("/").text
     assert "user@10.1.2.3" in page
     assert socket.gethostname() not in page
+
+
+def test_login_limits_follow_ports_yaml_without_restart(env, monkeypatch):
+    import asyncio
+
+    real_sleep = asyncio.sleep
+    monkeypatch.setattr(asyncio, "sleep", lambda s: real_sleep(0))
+    store, client = env
+    service.save_settings(store, {"web_max_failures": "2", "web_lockout_minutes": "3", "web_idle_minutes": "7"})
+    for _ in range(2):
+        client.post("/login", data={"username": "boss", "password": "nope", "csrf": token(client, "/login")})
+    r = client.post("/login", data={"username": "boss", "password": "secret", "csrf": token(client, "/login")})
+    assert "Too many failed logins. Try again in 3 minute(s)." in r.text  # locked after 2, not 5
+    assert client.app.state.sessions.idle_seconds == 7 * 60

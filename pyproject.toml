@@ -33,3 +33,4 @@ include = ["termserv*"]
 
 [tool.setuptools.package-data]
 "termserv.web" = ["templates/*.html", "static/*"]
+"termserv" = ["cockpit/*"]
