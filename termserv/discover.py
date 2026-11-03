@@ -97,3 +97,21 @@ def console_status(master: str = "127.0.0.1", port: int = 782) -> dict[str, Cons
         users = [u for u in rest if "@" in u]
         result[name] = ConsoleStatus(name, state, users)
     return result
+
+
+def primary_ip(fallback: str = "<address>") -> str:
+    """The address other machines most likely reach this one on: the source address
+    of the default route. Nothing is sent. Falls back to a placeholder when the
+    machine has no network (or only loopback)."""
+    import socket
+
+    for family, probe in ((socket.AF_INET, "192.0.2.1"), (socket.AF_INET6, "2001:db8::1")):
+        try:
+            with socket.socket(family, socket.SOCK_DGRAM) as s:
+                s.connect((probe, 9))
+                ip = s.getsockname()[0]
+        except OSError:
+            continue
+        if ip and not ip.startswith(("127.", "0.")) and ip not in ("::1", "::"):
+            return f"[{ip}]" if ":" in ip else ip
+    return fallback

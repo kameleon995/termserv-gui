@@ -108,22 +108,20 @@ def sshd_config(cfg: Config, host_keys: list[str] | None = None, banner_path: st
     return "\n".join(out)
 
 
-def banner(cfg: Config, hostname: str | None = None) -> str:
+def banner(cfg: Config) -> str:
     """Pre-login text sshd shows before asking for a password.
 
     ssh silently sends the local username when none is given, and the server
-    cannot tell, so the best we can do is say so up front.
+    cannot tell, so the best we can do is say so up front. The file is static,
+    so it shows a placeholder rather than an address that may change (DHCP).
     """
-    import socket
-
-    host = hostname or socket.gethostname()
     ports = cfg.enabled_ports()
     first = cfg.ssh_port(ports[0]) if ports else cfg.settings.base_port + 1
     return (
-        f"\r\n termserv serial console server ({host})\r\n"
+        "\r\n termserv serial console server\r\n"
         "\r\n"
         " Log in with your account name on this server:\r\n"
-        f"     ssh <username>@{host} -p {first}\r\n"
+        f"     ssh <username>@<address> -p {first}\r\n"
         "\r\n"
         " Without <username>@, ssh uses the name of your local user\r\n"
         " and the login will fail.\r\n"
