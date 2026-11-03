@@ -131,3 +131,54 @@ def test_log_and_users_screens(store, monkeypatch, tmp_path):
             await pilot.pause()
             assert calls == [("alice", "serial", True)]
     run(go())
+
+
+def test_arrow_keys_move_between_fields(store):
+    async def go():
+        app = TermservTUI(store, live=False)
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.press("e")
+            await pilot.pause()
+            form = app.screen
+            form.query_one("#number").focus()
+            await pilot.pause()
+            await pilot.press("down")
+            assert app.focused.id == "name"
+            await pilot.press("down")
+            assert app.focused.id == "usb_path"  # a closed dropdown does not swallow Down
+            await pilot.press("down")
+            assert app.focused.id == "device"
+            await pilot.press("up", "up")
+            assert app.focused.id == "name"
+            # Enter opens a dropdown; arrows then move inside the list, not between fields
+            sel = form.query_one("#baud")
+            sel.focus()
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            assert sel.expanded
+            await pilot.press("down", "enter")
+            await pilot.pause()
+            assert not sel.expanded and app.focused is sel
+            assert sel.value != 115200  # moved inside the list
+            await pilot.press("down")
+            assert app.focused.id == "parity"
+    run(go())
+
+
+def test_confirm_left_right(store):
+    async def go():
+        app = TermservTUI(store, live=False)
+        async with app.run_test(size=(140, 32)) as pilot:
+            await pilot.press("d")
+            await pilot.pause()
+            assert app.focused.id == "yes"
+            await pilot.press("right")
+            assert app.focused.id == "no"
+            await pilot.press("left")
+            assert app.focused.id == "yes"
+            await pilot.press("right", "enter")
+            await pilot.pause()
+            assert not isinstance(app.screen, Confirm)
+            assert len(store.load().ports) == 2  # "No" kept the port
+    run(go())

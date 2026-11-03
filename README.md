@@ -74,7 +74,8 @@ sudo termserv-tui
 ```
 
 Keys: `a` add, `e`/Enter edit, `d` delete, `r` release/grab, `l` log, `u` users,
-`p` apply, `q` quit.
+`p` apply, `q` quit. In forms and dialogs, the arrow keys move between fields and
+buttons (Tab works too); Enter or Space opens a dropdown.
 
 ![TUI: editing a port](docs/screenshots/tui-edit.png)
 

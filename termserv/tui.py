@@ -21,7 +21,41 @@ from .apply import ApplyError
 STATE_STYLE = {"up": "green", "down": "red", "released": "cyan", "disabled": "dim", "idle": "dim", "unknown": "yellow"}
 
 
-class Confirm(ModalScreen[bool]):
+class ArrowNavigation:
+    """Up/Down (and Left/Right on button rows) move between fields like Tab/Shift-Tab.
+
+    Priority bindings run before the focused widget sees the key, so a closed
+    dropdown does not swallow Up/Down (Enter or Space opens it). While a dropdown
+    list is open, the keys go to the list instead.
+    """
+
+    NAV_BINDINGS = [
+        Binding("down", "focus_next_field", "Next field", show=False, priority=True),
+        Binding("up", "focus_previous_field", "Previous field", show=False, priority=True),
+    ]
+
+    def check_action(self, action: str, parameters) -> bool | None:
+        if action in ("focus_next_field", "focus_previous_field"):
+            focused = self.focused
+            # an open dropdown list: let it handle the arrows
+            if focused is not None and any(type(n).__name__ == "SelectOverlay" for n in focused.ancestors_with_self):
+                return False
+        return True
+
+    def action_focus_next_field(self) -> None:
+        self.focus_next()
+
+    def action_focus_previous_field(self) -> None:
+        self.focus_previous()
+
+
+class Confirm(ArrowNavigation, ModalScreen[bool]):
+    BINDINGS = [
+        *ArrowNavigation.NAV_BINDINGS,
+        Binding("right", "focus_next_field", show=False, priority=True),
+        Binding("left", "focus_previous_field", show=False, priority=True),
+    ]
+
     def __init__(self, question: str) -> None:
         super().__init__()
         self.question = question
@@ -41,8 +75,10 @@ class Confirm(ModalScreen[bool]):
         self.dismiss(False)
 
 
-class PortForm(ModalScreen[bool]):
+class PortForm(ArrowNavigation, ModalScreen[bool]):
     """Add or edit one port. Dismisses True when saved."""
+
+    BINDINGS = [*ArrowNavigation.NAV_BINDINGS]
 
     def __init__(self, store: service.Store, port: model.Port, is_new: bool) -> None:
         super().__init__()
