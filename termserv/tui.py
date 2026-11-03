@@ -21,6 +21,27 @@ from .apply import ApplyError
 STATE_STYLE = {"up": "green", "down": "red", "released": "cyan", "disabled": "dim", "idle": "dim", "unknown": "yellow"}
 
 
+class SocketSelect(Select):
+    """Select whose entries for sockets already used by another port are greyed out
+    and cannot be picked (the core validation refuses them too)."""
+
+    def __init__(self, options, *, disabled_values=(), **kwargs) -> None:
+        self.disabled_values = set(disabled_values)
+        super().__init__(options, **kwargs)
+
+    def _setup_options_renderables(self) -> None:
+        super()._setup_options_renderables()
+        try:
+            from textual.widgets._select import SelectOverlay
+
+            overlay = self.query_one(SelectOverlay)
+            for index, (_, value) in enumerate(self._options):
+                if value in self.disabled_values:
+                    overlay.disable_option_at_index(index)
+        except Exception:  # Textual internals changed: labels still say "used by port N"
+            pass
+
+
 class ArrowNavigation:
     """Up/Down (and Left/Right on button rows) move between fields like Tab/Shift-Tab.
 
@@ -62,7 +83,7 @@ class Confirm(ArrowNavigation, ModalScreen[bool]):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
-            yield Label(self.question)
+            yield Static(self.question, id="question", classes="wrap")
             with Horizontal(classes="buttons"):
                 yield Button("Yes", id="yes", variant="error")
                 yield Button("No", id="no")
@@ -99,8 +120,9 @@ class PortForm(ArrowNavigation, ModalScreen[bool]):
                 yield Label("USB socket")
                 options = [(c.label + (f"  (used by port {c.used_by})" if c.used_by else ""), c.id_path)
                            for c in self.sockets]
-                yield Select(options, id="usb_path", prompt="none (use device path)",
-                             value=p.usb_path if p.usb_path else Select.NULL, compact=True)
+                yield SocketSelect(options, id="usb_path", prompt="none (use device path)",
+                                   value=p.usb_path if p.usb_path else Select.NULL, compact=True,
+                                   disabled_values=[c.id_path for c in self.sockets if c.used_by])
                 yield Label("Device path")
                 yield Input(p.device, id="device", placeholder=f"/dev/port{p.number} (default)", compact=True)
                 yield Label("Baud rate")
@@ -228,10 +250,13 @@ class UsersScreen(Screen):
 class TermservTUI(App):
     TITLE = "termserv"
     CSS = """
-    #status { height: 1; padding: 0 1; background: $boost; }
+    #status { height: auto; min-height: 1; padding: 0 1; background: $boost; }
+    /* Long messages wrap to the terminal width and reflow on resize. */
+    .wrap, .error, .hint, #status { width: 100%; text-wrap: wrap; }
+    .dialog > Label { width: 100%; }
     #status.pending { background: $warning 30%; }
     .hint { padding: 0 1; color: $text-muted; }
-    .dialog { width: 90; max-width: 100%; height: auto; max-height: 90%; padding: 1 2; border: thick $primary; background: $surface; }
+    .dialog { width: 90; max-width: 95%; height: auto; max-height: 90%; padding: 1 2; border: thick $primary; background: $surface; }
     Confirm, PortForm { align: center middle; }
     .fields { grid-size: 2; grid-columns: 18 1fr; grid-rows: 1; grid-gutter: 1 1; height: auto; margin: 1 0; }
     .fields Input, .fields Select { background: $boost; }

@@ -5,7 +5,7 @@
   <a class="button primary" href="/ports/new">Add port</a>
 </div>
 <p class="muted">Connect with <code>ssh -p {{ cfg.settings.base_port }}+N user@{{ hostname }}</code>. Escape menu: <kbd>Ctrl-E</kbd> <kbd>c</kbd> <kbd>?</kbd></p>
-<div id="ports" hx-get="/partials/ports" hx-trigger="every 5s" hx-swap="innerHTML">
+<div id="ports" hx-get="/partials/ports" hx-trigger="every 5s" hx-swap="innerHTML" hx-headers='{"X-Termserv-Background": "1"}'>
   {% include "_ports_table.html" %}
 </div>
 <section class="services">

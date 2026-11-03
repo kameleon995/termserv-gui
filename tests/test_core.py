@@ -254,3 +254,11 @@ def test_socket_choices(monkeypatch):
     assert by_path[a].used_by == 1  # port 1 owns USB 2.1
     assert by_path[b].used_by is None and "ttyUSB1 · FT232 · B2" in by_path[b].label
     assert not by_path["platform-x.usb-usb-0:2.3:1.0"].connected  # current socket, nothing plugged in
+
+
+def test_same_device_on_two_enabled_ports_rejected():
+    cfg = model.Config(ports=[model.Port(number=1, device="/dev/ttyS0"), model.Port(number=2, device="/dev/ttyS0")])
+    with pytest.raises(model.ConfigError, match="device /dev/ttyS0 already used by port 1"):
+        cfg.validate()
+    cfg.port(2).enabled = False  # a disabled duplicate is fine (e.g. a spare entry)
+    cfg.validate()

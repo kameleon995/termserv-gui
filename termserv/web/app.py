@@ -2,6 +2,10 @@
 
 Runs as root (it edits /etc and restarts services) behind HTTPS. Only members
 of settings.admin_group can log in, with their Linux password (PAM).
+
+Sessions are kept on the server (see sessions.py): the cookie is a random id
+without an expiry date, so closing the browser ends it; an idle session ends
+after settings.web_idle_minutes (default 60) and any session after 8 hours.
 """
 
 from __future__ import annotations
@@ -16,31 +20,34 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
 
 from .. import __version__, model, service
 from ..apply import ApplyError
+from .sessions import LoginThrottle, Session, SessionStore
 
 HERE = Path(__file__).parent
-SECRET_FILE = Path("/etc/termserv/web-secret")
 PAM_SERVICE = "termserv-web"
+COOKIE = "termserv_session"
+# Sent by the auto-refreshing parts of the page; such requests do not count as
+# activity, so an open but unattended tab still times out.
+BACKGROUND_HEADER = "x-termserv-background"
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+    ),
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), usb=(), serial=()",
+}
 
 
 def pam_authenticate(user: str, password: str) -> bool:
     import pam  # python-pam; imported lazily so tests need no PAM
 
     return pam.pam().authenticate(user, password, service=PAM_SERVICE)
-
-
-def load_secret(path: Path = SECRET_FILE) -> str:
-    try:
-        return path.read_text().strip()
-    except FileNotFoundError:
-        secret = secrets.token_hex(32)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.touch(mode=0o600)
-        path.write_text(secret)
-        return secret
 
 
 class NotLoggedIn(Exception):
@@ -50,35 +57,62 @@ class NotLoggedIn(Exception):
 def create_app(
     store: service.Store | None = None,
     authenticate: Callable[[str, str], bool] = pam_authenticate,
-    secret: str | None = None,
     https_only: bool = True,
+    sessions: SessionStore | None = None,
+    throttle: LoginThrottle | None = None,
 ) -> FastAPI:
     store = store or service.Store()
+    if sessions is None:
+        try:
+            idle = store.load().settings.web_idle_minutes
+        except model.ConfigError:
+            idle = model.Settings().web_idle_minutes
+        sessions = SessionStore(idle_seconds=idle * 60)
+    throttle = throttle or LoginThrottle()
     app = FastAPI(title="termserv", docs_url=None, redoc_url=None, openapi_url=None)
-    app.add_middleware(
-        SessionMiddleware,
-        secret_key=secret or load_secret(),
-        session_cookie="termserv_session",
-        max_age=8 * 3600,
-        same_site="strict",
-        https_only=https_only,
-    )
+    app.state.sessions = sessions
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     templates.env.globals["version"] = __version__
 
+    @app.middleware("http")
+    async def session_middleware(request: Request, call_next):
+        sid = request.cookies.get(COOKIE)
+        background = request.headers.get(BACKGROUND_HEADER) == "1"
+        sess, timed_out = sessions.get(sid, touch=not background)
+        if sess is None:
+            sess = sessions.new()
+            sess.expired_notice = timed_out
+            if timed_out:
+                sess.data.setdefault("flash", []).append(
+                    {"text": "Your session ended after inactivity. Please log in again.", "kind": "error"})
+        request.state.session = sess
+        response = await call_next(request)
+        sess = request.state.session  # login/logout swap it
+        if sess.id != sid:
+            # No max_age/expires: a browser-session cookie, gone when the browser closes.
+            response.set_cookie(COOKIE, sess.id, httponly=True, secure=https_only, samesite="strict", path="/")
+        for k, v in SECURITY_HEADERS.items():
+            response.headers.setdefault(k, v)
+        if not request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     # --- helpers -----------------------------------------------------------
 
+    def S(request: Request) -> dict:
+        return request.state.session.data
+
     def current_user(request: Request) -> str:
-        user = request.session.get("user")
+        user = S(request).get("user")
         if not user:
             raise NotLoggedIn()
         return user
 
     def csrf_token(request: Request) -> str:
-        tok = request.session.get("csrf")
+        tok = S(request).get("csrf")
         if not tok:
-            tok = request.session["csrf"] = secrets.token_urlsafe(32)
+            tok = S(request)["csrf"] = secrets.token_urlsafe(32)
         return tok
 
     async def check_csrf(request: Request) -> None:
@@ -86,16 +120,17 @@ def create_app(
         if sent is None:
             form = await request.form()
             sent = form.get("csrf", "")
-        if not hmac.compare_digest(str(sent), request.session.get("csrf", "")):
+        expected = S(request).get("csrf", "")
+        if not expected or not hmac.compare_digest(str(sent), expected):
             raise HTTPException(403, "bad CSRF token, reload the page")
 
     def flash(request: Request, text: str, kind: str = "ok") -> None:
-        request.session.setdefault("flash", []).append({"text": text, "kind": kind})
+        S(request).setdefault("flash", []).append({"text": text, "kind": kind})
 
     def render(request: Request, name: str, **ctx) -> HTMLResponse:
-        ctx.setdefault("user", request.session.get("user"))
+        ctx.setdefault("user", S(request).get("user"))
         ctx["csrf"] = csrf_token(request)
-        ctx["flashes"] = request.session.pop("flash", [])
+        ctx["flashes"] = S(request).pop("flash", [])
         ctx["request"] = request
         if ctx["user"]:
             ctx.setdefault("pending", service.pending_changes(store))
@@ -126,29 +161,36 @@ def create_app(
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_page(request: Request):
+        if S(request).get("user"):
+            return back("/")
         return render(request, "login.html", user=None)
 
     @app.post("/login")
     async def login(request: Request, username: str = Form(...), password: str = Form(...)):
         await check_csrf(request)
+        client = request.client.host if request.client else "?"
+        wait = throttle.locked_for(client)
+        if wait:
+            flash(request, f"Too many failed logins. Try again in {(wait + 59) // 60} minute(s).", "error")
+            return back("/login")
         username = username.strip()
         cfg = store.load()
         ok = await asyncio.to_thread(authenticate, username, password)
         if not ok or not service.is_admin(cfg, username):
+            throttle.failed(client)
             await asyncio.sleep(1.5)  # slow down guessing
             flash(request, f"Login failed. Use a Linux account in the '{cfg.settings.admin_group}' group.", "error")
             return back("/login")
-        request.session.clear()
-        request.session["user"] = username
+        throttle.succeeded(client)
+        request.state.session = sessions.login(request.state.session, username)
         return back("/")
 
     @app.post("/logout")
     async def logout(request: Request):
         await check_csrf(request)
-        request.session.clear()
+        sessions.delete(request.state.session)  # the old id is now worthless, even if copied
+        request.state.session = sessions.new()
         return back("/login")
-
-    # --- ports -------------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):
@@ -236,7 +278,7 @@ def create_app(
         current_user(request)
         await check_csrf(request)
         run_action(request, lambda: service.apply_changes(store), "Changes applied.")
-        return back(request.headers.get("referer") or "/")
+        return back("/")
 
     # --- logs --------------------------------------------------------------
 

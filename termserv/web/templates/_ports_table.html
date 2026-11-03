@@ -27,7 +27,7 @@
         {% if v.state == 'released' %}
         <form method="post" action="/ports/{{ v.number }}/grab"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Grab</button></form>
         {% elif v.state != 'disabled' %}
-        <form method="post" action="/ports/{{ v.number }}/release" onsubmit="return confirm('Release port {{ v.number }}? Anyone connected is disconnected and the device is freed for local tools.')"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Release</button></form>
+        <form method="post" action="/ports/{{ v.number }}/release" data-confirm="Release port {{ v.number }}? Anyone connected is disconnected and the device is freed for local tools."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Release</button></form>
         {% endif %}
       </td>
     </tr>

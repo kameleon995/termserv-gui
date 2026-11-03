@@ -182,3 +182,55 @@ def test_confirm_left_right(store):
             assert not isinstance(app.screen, Confirm)
             assert len(store.load().ports) == 2  # "No" kept the port
     run(go())
+
+
+def test_used_socket_cannot_be_picked(store, monkeypatch):
+    from termserv import discover
+    from textual.widgets._select import SelectOverlay
+
+    a, b = "platform-x.usb-usb-0:2.1:1.0", "platform-x.usb-usb-0:2.4:1.0"
+    monkeypatch.setattr(discover, "usb_serial_devices", lambda: [
+        discover.SerialDevice("/dev/ttyUSB0", a, model="FT232"),
+        discover.SerialDevice("/dev/ttyUSB1", b, model="FT232"),
+    ])
+    cfg = store.load()
+    cfg.port(1).usb_path = a
+    store.save(cfg)
+
+    async def go():
+        app = TermservTUI(store, live=False)
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.press("down", "e")  # edit port 2
+            await pilot.pause()
+            sel = app.screen.query_one("#usb_path")
+            overlay = sel.query_one(SelectOverlay)
+            labels = [str(overlay.get_option_at_index(i).prompt) for i in range(overlay.option_count)]
+            disabled = [overlay.get_option_at_index(i).disabled for i in range(overlay.option_count)]
+            used = next(i for i, l in enumerate(labels) if "used by port 1" in l)
+            free = next(i for i, l in enumerate(labels) if "ttyUSB1" in l)
+            assert disabled[used] and not disabled[free]
+            # even if the value is forced, saving is refused
+            sel.value = a
+            app.screen.query_one("#save").press()
+            await pilot.pause()
+            assert "already used by port 1" in str(app.screen.query_one("#error").render())
+            assert store.load().port(2).usb_path == ""
+    run(go())
+
+
+@pytest.mark.parametrize("width", [60, 140])
+def test_long_dialog_text_wraps(store, width):
+    async def go():
+        app = TermservTUI(store, live=False)
+        async with app.run_test(size=(width, 30)) as pilot:
+            await pilot.press("r")  # release confirm: a long question
+            await pilot.pause()
+            q = app.screen.query_one("#question")
+            dialog = q.parent
+            assert q.region.right <= dialog.region.right  # nothing runs past the dialog edge
+            assert dialog.region.right <= width
+            text = str(q.render())
+            assert q.region.height * q.region.width >= len(text) * 0.9  # every word got room
+            if width == 60:
+                assert q.region.height > 1  # wrapped onto several lines
+    run(go())

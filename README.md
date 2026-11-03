@@ -63,7 +63,15 @@ Logs are in `/var/log/conserver/portN.log`.
 - **Users**: which Linux accounts are in each access group (`serial` plus any
   per-port groups); click to add or remove. Takes effect on the next SSH login.
 - Login uses PAM (`/etc/pam.d/termserv-web`) and is limited to
-  `settings.admin_group` (default `sudo`). Sessions last 8 hours.
+  `settings.admin_group` (default `sudo`). Five failed logins from one address
+  lock it out for 10 minutes.
+- Sessions live on the server; the browser only gets a random id in a cookie with
+  no expiry date (HttpOnly, Secure, SameSite=Strict), so it is gone when the
+  browser closes. A session ends after `settings.web_idle_minutes` (default 60)
+  without activity (the auto-refreshing port table does not count as activity),
+  after 8 hours at most, on logout (the old id stops working at once) and when
+  the service restarts. Pages set a strict Content-Security-Policy (no inline
+  scripts), deny framing and are never cached.
 - Service: `termserv-web`, port `settings.web_port` (default 8443), certificate in
   `/etc/termserv/web.crt` (replace it with your own if you like).
 

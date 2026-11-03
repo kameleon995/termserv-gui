@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 
 from termserv import apply as applymod
 from termserv import model, service
-from termserv.web.app import create_app
+from termserv.web.app import COOKIE, create_app
+from termserv.web.sessions import LoginThrottle, SessionStore
 
 PORTS = """
 settings: {base_port: 2000, ssh_group: serial, admin_group: admins}
@@ -26,7 +27,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "is_admin", lambda cfg, user: user == "boss")
     monkeypatch.setattr(service, "group_members", lambda g: {"boss"} if g == "serial" else set())
     monkeypatch.setattr(service, "login_users", lambda: ["boss", "eve"])
-    app = create_app(store, authenticate=lambda u, p: p == "secret", secret="test", https_only=False)
+    app = create_app(store, authenticate=lambda u, p: p == "secret", https_only=False)
     return store, TestClient(app)
 
 
@@ -155,3 +156,113 @@ def test_logout(env):
     login(c)
     c.post("/logout", data={"csrf": token(c)})
     assert c.get("/").url.path == "/login"
+
+
+# --- session hardening -------------------------------------------------------
+
+class FakeClock:
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
+@pytest.fixture
+def clocked(env, tmp_path, monkeypatch):
+    import asyncio
+
+    real_sleep = asyncio.sleep
+    monkeypatch.setattr(asyncio, "sleep", lambda s: real_sleep(0))
+    store, _ = env
+    clock = FakeClock()
+    sessions = SessionStore(idle_seconds=3600, clock=clock)
+    throttle = LoginThrottle(max_failures=3, window_seconds=600, clock=clock)
+    app = create_app(store, authenticate=lambda u, p: p == "secret", https_only=True,
+                     sessions=sessions, throttle=throttle)
+    return TestClient(app, base_url="https://testserver"), clock, sessions
+
+
+def test_cookie_is_browser_session_only_and_locked_down(clocked):
+    c, _, _ = clocked
+    r = c.get("/login")
+    cookie = r.headers["set-cookie"].lower()
+    assert "httponly" in cookie and "secure" in cookie and "samesite=strict" in cookie
+    assert "max-age" not in cookie and "expires" not in cookie  # dies with the browser
+
+
+def test_session_id_changes_at_login_and_dies_at_logout(clocked):
+    c, _, _ = clocked
+    c.get("/login")
+    before = c.cookies.get(COOKIE)
+    login(c)
+    after = c.cookies.get(COOKIE)
+    assert after and after != before  # no session fixation
+    c.post("/logout", data={"csrf": token(c)})
+    # replaying the old cookie after logout gets nothing
+    c.cookies.set(COOKIE, after)
+    assert c.get("/").url.path == "/login"
+
+
+def test_idle_timeout(clocked):
+    c, clock, _ = clocked
+    login(c)
+    clock.t += 59 * 60
+    assert c.get("/").url.path == "/"  # activity resets the idle timer
+    clock.t += 59 * 60
+    assert c.get("/").url.path == "/"
+    clock.t += 61 * 60
+    r = c.get("/")
+    assert r.url.path == "/login" and "ended after inactivity" in r.text
+
+
+def test_background_refresh_does_not_keep_session_alive(clocked):
+    c, clock, _ = clocked
+    login(c)
+    bg = {"HX-Request": "true", "X-Termserv-Background": "1"}
+    for _ in range(12):  # an open tab polling for an hour and a bit
+        clock.t += 6 * 60
+        r = c.get("/partials/ports", headers=bg)
+    assert r.headers.get("HX-Redirect") == "/login"
+
+
+def test_absolute_session_lifetime(clocked):
+    c, clock, _ = clocked
+    login(c)
+    for _ in range(9):  # active every 55 minutes for over 8 hours
+        clock.t += 55 * 60
+        r = c.get("/")
+    assert r.url.path == "/login"
+
+
+def test_login_lockout(clocked):
+    c, clock, _ = clocked
+    for _ in range(3):
+        login(c, password="bad")
+    r = login(c)  # right password, but locked out
+    assert r.url.path == "/login" and "Too many failed logins" in r.text
+    clock.t += 601
+    assert login(c).url.path == "/"
+
+
+def test_security_headers(clocked):
+    c, _, _ = clocked
+    r = c.get("/login")
+    csp = r.headers["content-security-policy"]
+    assert "script-src 'self'" in csp and "unsafe-inline" not in csp and "frame-ancestors 'none'" in csp
+    assert r.headers["x-frame-options"] == "DENY"
+    assert r.headers["cache-control"] == "no-store"
+    assert "<script>" not in r.text and "onsubmit" not in r.text
+
+
+def test_session_store_caps_anonymous_sessions(monkeypatch):
+    from termserv.web import sessions as smod
+
+    monkeypatch.setattr(smod, "MAX_SESSIONS", 10)
+    store = SessionStore()
+    keep = store.new()
+    keep.data["user"] = "boss"
+    for _ in range(50):
+        store.new()
+    assert len(store) <= 11
+    assert store.get(keep.id)[0] is keep  # logged-in sessions are never evicted for space

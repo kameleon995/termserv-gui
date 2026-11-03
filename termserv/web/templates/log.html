@@ -6,8 +6,6 @@
   <a class="button" href="/">Back</a>
 </div>
 <p class="muted">Last 64 KB of <code>{{ cfg.settings.log_dir }}/port{{ port.number }}.log</code>, refreshed every 3 seconds.</p>
-<pre id="log" class="log" hx-get="/partials/ports/{{ port.number }}/log" hx-trigger="every 3s" hx-swap="innerHTML"
-     hx-on::after-swap="if (this.dataset.follow !== '0') this.scrollTop = this.scrollHeight"
-     onscroll="this.dataset.follow = (this.scrollTop + this.clientHeight >= this.scrollHeight - 8) ? '1' : '0'">{% include "_log.html" %}</pre>
-<script>document.addEventListener('DOMContentLoaded', () => { const l = document.getElementById('log'); l.scrollTop = l.scrollHeight; });</script>
+<pre id="log" class="log" data-follow="1" hx-get="/partials/ports/{{ port.number }}/log" hx-trigger="every 3s" hx-swap="innerHTML"
+     hx-headers='{"X-Termserv-Background": "1"}'>{% include "_log.html" %}</pre>
 {% endblock %}

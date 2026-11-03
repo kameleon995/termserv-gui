@@ -65,6 +65,8 @@ class Settings:
     # Linux group whose members may use the web UI (Ubuntu's admins are in "sudo").
     admin_group: str = "sudo"
     web_port: int = 8443
+    # Web UI sessions end after this many minutes without activity.
+    web_idle_minutes: int = 60
 
 
 @dataclass
@@ -92,6 +94,8 @@ class Config:
             errors.append(f"settings.ssh_group {s.ssh_group!r} is not a valid group name")
         if not GROUP_RE.match(s.admin_group):
             errors.append(f"settings.admin_group {s.admin_group!r} is not a valid group name")
+        if not (1 <= s.web_idle_minutes <= 1440):
+            errors.append(f"settings.web_idle_minutes {s.web_idle_minutes} must be 1..1440")
         if not (1 <= s.web_port <= 65535):
             errors.append(f"settings.web_port {s.web_port} must be 1..65535")
         if not s.log_dir.startswith("/"):
@@ -100,6 +104,7 @@ class Config:
         seen_numbers: set[int] = set()
         seen_names: set[str] = set()
         seen_usb: dict[str, int] = {}
+        seen_dev: dict[str, int] = {}
         for p in self.ports:
             where = f"port {p.number}"
             if not isinstance(p.number, int) or not (1 <= p.number <= 512):
@@ -126,6 +131,11 @@ class Config:
                     errors.append(f"{where}: group {g!r} is not a valid group name")
             if p.usb_path and not USB_PATH_RE.match(p.usb_path):
                 errors.append(f"{where}: usb_path {p.usb_path!r} has invalid characters")
+            dev = p.device_path()
+            if p.enabled and dev in seen_dev:
+                errors.append(f"{where}: device {dev} already used by port {seen_dev[dev]}")
+            if p.enabled:
+                seen_dev.setdefault(dev, p.number)
             if p.usb_path:
                 if p.usb_path in seen_usb:
                     errors.append(f"{where}: USB socket already used by port {seen_usb[p.usb_path]}")
