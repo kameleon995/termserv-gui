@@ -58,6 +58,9 @@ class Settings:
     ssh_group: str = "serial"
     log_dir: str = "/var/log/conserver"
     conserver_port: int = 782
+    # Linux group whose members may use the web UI (Ubuntu's admins are in "sudo").
+    admin_group: str = "sudo"
+    web_port: int = 8443
 
 
 @dataclass
@@ -83,6 +86,10 @@ class Config:
             errors.append(f"settings.base_port {s.base_port} must be 1024..65000")
         if not GROUP_RE.match(s.ssh_group):
             errors.append(f"settings.ssh_group {s.ssh_group!r} is not a valid group name")
+        if not GROUP_RE.match(s.admin_group):
+            errors.append(f"settings.admin_group {s.admin_group!r} is not a valid group name")
+        if not (1 <= s.web_port <= 65535):
+            errors.append(f"settings.web_port {s.web_port} must be 1..65535")
         if not s.log_dir.startswith("/"):
             errors.append("settings.log_dir must be an absolute path")
 

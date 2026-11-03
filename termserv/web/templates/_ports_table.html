@@ -1,0 +1,37 @@
+{% if not views %}
+<div class="empty">No ports yet. <a href="/ports/new">Add the first one</a>.</div>
+{% else %}
+<div class="table-wrap">
+<table class="ports">
+  <thead>
+    <tr><th>Port</th><th>SSH</th><th>Name</th><th>Device</th><th>Line</th><th>Access</th><th>State</th><th>Connected</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for v in views %}
+    <tr class="{{ 'off' if v.state == 'disabled' }}">
+      <td class="num">{{ v.number }}</td>
+      <td><code>{{ v.ssh_port }}</code></td>
+      <td>{{ v.port.name or '—' }}</td>
+      <td>
+        <code>{{ v.port.device_path() }}</code>
+        {% if not v.device_present and v.state != 'disabled' %}<span class="badge bad" title="Device file not found: adapter unplugged or wrong USB path">missing</span>{% endif %}
+      </td>
+      <td>{{ v.port.baud }} 8{{ v.port.parity[0] | upper }}1{% if v.port.ondemand %} <span class="badge muted" title="Device is opened only while someone is connected">on demand</span>{% endif %}</td>
+      <td>{{ v.port.groups | join(', ') if v.port.groups else cfg.settings.ssh_group }}</td>
+      <td><span class="badge state-{{ v.state }}">{{ v.state }}</span></td>
+      <td>{{ v.users | join(', ') or '—' }}</td>
+      <td class="actions">
+        <a href="/ports/{{ v.number }}/edit">Edit</a>
+        <a href="/ports/{{ v.number }}/log">Log</a>
+        {% if v.state == 'released' %}
+        <form method="post" action="/ports/{{ v.number }}/grab"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Grab</button></form>
+        {% elif v.state != 'disabled' %}
+        <form method="post" action="/ports/{{ v.number }}/release" onsubmit="return confirm('Release port {{ v.number }}? Anyone connected is disconnected and the device is freed for local tools.')"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Release</button></form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}

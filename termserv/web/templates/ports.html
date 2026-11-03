@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="head">
+  <h1>Serial ports</h1>
+  <a class="button primary" href="/ports/new">Add port</a>
+</div>
+<p class="muted">Connect with <code>ssh -p {{ cfg.settings.base_port }}+N user@{{ hostname }}</code>. Escape menu: <kbd>Ctrl-E</kbd> <kbd>c</kbd> <kbd>?</kbd></p>
+<div id="ports" hx-get="/partials/ports" hx-trigger="every 5s" hx-swap="innerHTML">
+  {% include "_ports_table.html" %}
+</div>
+<section class="services">
+  <h2>Services</h2>
+  <ul>
+    {% for name, state in services.items() %}
+    <li><span class="dot {{ 'good' if state == 'active' else ('muted' if state == 'unknown' else 'bad') }}"></span>{{ name }} <span class="muted">{{ state }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

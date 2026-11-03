@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 echo "==> Installing packages"
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-  conserver-server conserver-client openssh-server python3 python3-venv
+  conserver-server conserver-client openssh-server python3 python3-venv openssl
 
 echo "==> Stopping services that grab USB serial adapters"
 # brltty claims CH340/CH341 adapters; ModemManager probes new serial ports.
@@ -22,7 +22,9 @@ systemctl disable --now conserver-server 2>/dev/null || true
 echo "==> Installing termserv into /opt/termserv"
 python3 -m venv /opt/termserv
 /opt/termserv/bin/pip install -q .
+/opt/termserv/bin/pip install -q --upgrade pip >/dev/null 2>&1 || true
 ln -sf /opt/termserv/bin/termservctl /usr/local/bin/termservctl
+ln -sf /opt/termserv/bin/termserv-tui /usr/local/bin/termserv-tui
 
 install -d -m 755 /usr/local/lib/termserv /etc/termserv /var/log/conserver
 install -m 755 scripts/serial-attach /usr/local/lib/termserv/serial-attach
@@ -35,10 +37,26 @@ fi
 getent group serial >/dev/null || groupadd --system serial
 echo "    add users with: usermod -aG serial <user>"
 
-install -m 644 systemd/termserv-conserver.service systemd/termserv-sshd.service /etc/systemd/system/
+echo "==> Web UI: PAM login and a self-signed HTTPS certificate"
+install -m 644 systemd/termserv-web.pam /etc/pam.d/termserv-web
+if [ ! -f /etc/termserv/web.crt ]; then
+  host=$(hostname)
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=$host" \
+    -addext "subjectAltName=DNS:$host,DNS:$host.local,DNS:localhost,IP:127.0.0.1" \
+    -keyout /etc/termserv/web.key -out /etc/termserv/web.crt 2>/dev/null
+  chmod 600 /etc/termserv/web.key
+fi
+
+install -m 644 systemd/termserv-conserver.service systemd/termserv-sshd.service \
+  systemd/termserv-web.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable termserv-conserver.service termserv-sshd.service
+systemctl enable termserv-conserver.service termserv-sshd.service termserv-web.service
 
 echo "==> Generating config and starting services"
 termservctl apply
-echo "==> Done. Try: ssh -p 2001 <user>@$(hostname)"
+systemctl restart termserv-web.service
+port=$(/opt/termserv/bin/python -c "from termserv import model; print(model.load().settings.web_port)")
+echo "==> Done."
+echo "    Serial ports: ssh -p 2001 <user>@$(hostname)"
+echo "    Web UI:       https://$(hostname):$port  (log in as a member of the 'sudo' group)"
+echo "    TUI:          sudo termserv-tui"

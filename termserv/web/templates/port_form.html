@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Add port' if is_new else 'Port ' ~ port.number }} · termserv{% endblock %}
+{% block content %}
+<div class="head"><h1>{{ 'Add port' if is_new else 'Edit port ' ~ (original or port.number) }}</h1></div>
+<form class="card form grid" method="post" action="{{ '/ports' if is_new else '/ports/' ~ (original or port.number) }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Port number
+    <input name="number" type="number" min="1" max="512" value="{{ port.number }}" required>
+    <small>SSH port {{ cfg.settings.base_port }} + number</small>
+  </label>
+  <label>Name <input name="name" value="{{ port.name }}" placeholder="router1" maxlength="32"></label>
+  <label class="wide">USB socket
+    <input name="usb_path" list="usb-devices" value="{{ port.usb_path }}" placeholder="pick a connected adapter or paste a USB path">
+    <datalist id="usb-devices">
+      {% for d in devices %}<option value="{{ d.id_path }}">{{ d.node }} · {{ d.vendor }} {{ d.model }} {{ d.serial }}</option>{% endfor %}
+    </datalist>
+    <small>The port follows the physical USB socket, so adapters can be swapped.
+      {% if devices %}Connected now: {% for d in devices %}<code>{{ d.node }}</code> {{ d.id_path }}{{ ', ' if not loop.last }}{% endfor %}
+      {% else %}No USB serial adapters are connected right now.{% endif %}</small>
+  </label>
+  <label class="wide">Device path (optional)
+    <input name="device" value="{{ port.device }}" placeholder="/dev/port{{ port.number }}">
+    <small>Leave empty to use /dev/portN from the USB socket above.</small>
+  </label>
+  <label>Baud rate
+    <select name="baud">{% for b in bauds %}<option {{ 'selected' if b == port.baud }}>{{ b }}</option>{% endfor %}</select>
+  </label>
+  <label>Parity
+    <select name="parity">{% for p in parities %}<option {{ 'selected' if p == port.parity }}>{{ p }}</option>{% endfor %}</select>
+    <small>8 data bits, 1 stop bit</small>
+  </label>
+  <label class="wide">Allowed groups
+    <input name="groups" value="{{ port.groups | join(', ') }}" placeholder="{{ cfg.settings.ssh_group }}">
+    <small>Linux groups that may use this port. Empty means everyone in <code>{{ cfg.settings.ssh_group }}</code>.</small>
+  </label>
+  <label class="check"><input type="checkbox" name="enabled" value="1" {{ 'checked' if port.enabled }}> Enabled</label>
+  <label class="check"><input type="checkbox" name="ondemand" value="1" {{ 'checked' if port.ondemand }}> Open only while someone is connected <small>(frees the device otherwise; nothing is logged while idle)</small></label>
+  <div class="buttons wide">
+    <button class="primary">{{ 'Add port' if is_new else 'Save' }}</button>
+    <a class="button" href="/">Cancel</a>
+  </div>
+</form>
+{% if not is_new %}
+<form method="post" action="/ports/{{ original or port.number }}/delete" class="danger" onsubmit="return confirm('Delete port {{ port.number }}?')">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="danger">Delete port</button>
+</form>
+{% endif %}
+{% endblock %}

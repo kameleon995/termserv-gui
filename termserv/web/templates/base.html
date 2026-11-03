@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}termserv{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
+  <header class="top">
+    <a class="brand" href="/">termserv</a>
+    {% if user %}
+    <nav>
+      <a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>Ports</a>
+      <a href="/users" {% if request.url.path == '/users' %}aria-current="page"{% endif %}>Users</a>
+    </nav>
+    <form class="who" method="post" action="/logout">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <span>{{ user }}</span> <button class="link">Log out</button>
+    </form>
+    {% endif %}
+  </header>
+  <main>
+    {% if user and pending %}
+    <div class="banner warn">
+      <span>Saved changes are not live yet ({{ pending | join(', ') }}).</span>
+      <form method="post" action="/apply">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="primary">Apply changes</button>
+      </form>
+    </div>
+    {% endif %}
+    {% for f in flashes %}
+    <div class="banner {{ 'error' if f.kind == 'error' else 'ok' }}" role="status">{{ f.text }}</div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer>termserv {{ version }}</footer>
+</body>
+</html>

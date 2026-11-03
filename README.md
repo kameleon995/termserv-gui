@@ -13,12 +13,15 @@ ssh -p 2000+N ──> termserv sshd ──ForceCommand──> serial-attach ─�
   authenticates Linux users, enforces per-port groups and never gives a shell.
 - **conserver** owns the serial ports: per-port baud/parity, timestamped logs of
   every port, one writer plus any number of read-only watchers, break signals.
-- **ports.yaml** is the single source of truth. `termservctl` (and later the web
-  UI and TUI) edit it, generate the sshd, conserver and udev config, syntax-check
+- **ports.yaml** is the single source of truth. `termservctl`, the web
+  UI and the TUI edit it, generate the sshd, conserver and udev config, syntax-check
   them, and only then reload the services.
 
-Status: proof of concept. The web UI (FastAPI + htmx) and TUI (Textual) come next
-and will reuse the `termserv` Python package.
+Manage it from a **web UI** (HTTPS, log in with your Linux account), a **TUI** over
+SSH (`sudo termserv-tui`) or the `termservctl` CLI. All three use the same
+`termserv` Python package, so they validate and behave the same way.
+
+![Web UI: port table](docs/screenshots/web-ports.png)
 
 ## Install
 
@@ -32,6 +35,9 @@ sudo termservctl set 1 --name router1 --baud 115200 --usb-path platform-3610000.
 sudo termservctl apply
 ssh -p 2001 alice@consolehost
 ```
+
+Then open `https://<host>:8443` and log in with a Linux account in the `sudo`
+group. The certificate is self-signed, so the browser asks you to accept it once.
 
 `install.sh` disables `brltty` and `ModemManager`, which grab USB-serial adapters
 on Ubuntu, and the distro's own `conserver-server` service (termserv runs its own,
@@ -48,6 +54,29 @@ bound to localhost).
 
 The first user on a port gets write access; later users watch read-only.
 Logs are in `/var/log/conserver/portN.log`.
+
+## Web UI
+
+- **Ports**: live table (state, who is connected, missing adapters), add, edit,
+  delete, release/grab, per-port log viewer. Edits are saved to `ports.yaml`; a
+  banner shows when they are not live yet, and **Apply changes** activates them.
+- **Users**: which Linux accounts are in each access group (`serial` plus any
+  per-port groups); click to add or remove. Takes effect on the next SSH login.
+- Login uses PAM (`/etc/pam.d/termserv-web`) and is limited to
+  `settings.admin_group` (default `sudo`). Sessions last 8 hours.
+- Service: `termserv-web`, port `settings.web_port` (default 8443), certificate in
+  `/etc/termserv/web.crt` (replace it with your own if you like).
+
+## TUI
+
+```sh
+sudo termserv-tui
+```
+
+Keys: `a` add, `e`/Enter edit, `d` delete, `r` release/grab, `l` log, `u` users,
+`p` apply, `q` quit.
+
+![TUI: editing a port](docs/screenshots/tui-edit.png)
 
 ## Using a port locally (cable tests)
 
@@ -92,7 +121,7 @@ termservctl apply [--no-reload]
 
 ```sh
 pip install -e '.[test]'
-python3 -m pytest tests/test_core.py          # unit tests, safe anywhere
+python3 -m pytest tests/test_core.py tests/test_web.py tests/test_tui.py   # safe anywhere
 ```
 
 `tests/e2e` builds the whole stack with virtual serial ports (socat pty pairs and a
