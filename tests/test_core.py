@@ -144,3 +144,77 @@ def test_cli_set_list_remove(tmp_path, capsys):
     assert model.load(f).port(1).baud == 9600
     assert cli.main(["-f", f, "remove", "2"]) == 0
     assert model.load(f).port(2) is None
+
+
+# --- release / grab / ondemand ----------------------------------------------
+
+def test_conserver_cf_ondemand():
+    cfg = make_cfg()
+    cfg.port(2).ondemand = True
+    text = render.conserver_cf(cfg)
+    port2 = text[text.index("console port2"):]
+    assert "options ondemand;" in port2.split("}")[0]
+    assert "options ondemand;" not in text[text.index("console port1"):].split("}")[0]
+
+
+def test_conserver_cf_released_port_left_out():
+    text = render.conserver_cf(make_cfg(), released={1})
+    assert "console port1 {" not in text
+    assert "console port2 {" in text
+    assert "termserv-idle" not in text
+
+
+def test_conserver_cf_never_empty():
+    # conserver exits with "no consoles found"; a placeholder keeps it running
+    for text in (render.conserver_cf(make_cfg(), released={1, 2}), render.conserver_cf(model.Config())):
+        assert "console termserv-idle {" in text and "options ondemand;" in text
+
+
+@pytest.mark.skipif(not shutil.which("conserver"), reason="needs conserver")
+def test_placeholder_config_passes_conserver_check(tmp_path):
+    import subprocess
+
+    cf = tmp_path / "conserver.cf"
+    cf.write_text(render.conserver_cf(make_cfg(), released={1, 2}))
+    subprocess.run(["conserver", "-S", "-C", str(cf)], check=True, capture_output=True)
+
+
+def test_ondemand_roundtrip(tmp_path):
+    f = tmp_path / "ports.yaml"
+    cfg = make_cfg()
+    cfg.port(1).ondemand = True
+    model.save(cfg, f)
+    assert model.load(f).port(1).ondemand is True
+    assert "ondemand" not in yaml.safe_load(f.read_text())["ports"][1]  # default omitted
+
+
+def test_set_released(tmp_path, monkeypatch):
+    monkeypatch.setattr(model, "RELEASE_DIR", tmp_path / "released")
+    paths = applymod.Paths(conserver_cf=tmp_path / "conserver.cf")
+    cfg = make_cfg()
+    applymod.set_released(cfg, 1, True, paths=paths, reload=False)
+    assert model.released_ports() == {1}
+    assert "console port1 {" not in paths.conserver_cf.read_text()
+    # a full apply keeps honouring the release
+    assert "console port1 {" not in applymod.check(cfg)["conserver_cf"]
+    applymod.set_released(cfg, 1, False, paths=paths, reload=False)
+    assert model.released_ports() == set()
+    assert "console port1 {" in paths.conserver_cf.read_text()
+
+
+def test_set_released_rejects_unknown_or_disabled(tmp_path, monkeypatch):
+    monkeypatch.setattr(model, "RELEASE_DIR", tmp_path / "released")
+    with pytest.raises(applymod.ApplyError, match="does not exist"):
+        applymod.set_released(make_cfg(), 9, True, reload=False)
+    with pytest.raises(applymod.ApplyError, match="disabled"):
+        applymod.set_released(make_cfg(), 3, True, reload=False)
+
+
+def test_cli_ondemand_flag(tmp_path):
+    f = str(tmp_path / "ports.yaml")
+    assert cli.main(["-f", f, "set", "1", "--ondemand"]) == 0
+    assert model.load(f).port(1).ondemand is True
+    assert cli.main(["-f", f, "set", "1", "--name", "x"]) == 0  # untouched when flag absent
+    assert model.load(f).port(1).ondemand is True
+    assert cli.main(["-f", f, "set", "1", "--no-ondemand"]) == 0
+    assert model.load(f).port(1).ondemand is False

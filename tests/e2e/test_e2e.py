@@ -33,7 +33,7 @@ settings:
   log_dir: /var/log/conserver
 ports:
   - {number: 1, name: router1, device: /dev/port1, baud: 115200}
-  - {number: 2, name: switch1, device: /dev/port2, baud: 9600, groups: [serial-lab]}
+  - {number: 2, name: switch1, device: /dev/port2, baud: 9600, groups: [serial-lab], ondemand: true}
   - {number: 3, name: spare, device: /dev/port3, enabled: false}
 """
 USERS = {"alice": "serial", "bob": "serial", "carol": "serial-lab"}
@@ -59,6 +59,7 @@ def wait_port(port, timeout=10):
 def stack():
     procs = []
     shutil.rmtree(WORK, ignore_errors=True)
+    shutil.rmtree("/run/termserv/released", ignore_errors=True)  # leftovers from an aborted run
     WORK.mkdir(parents=True)
     os.makedirs("/run/sshd", exist_ok=True)
     os.makedirs("/var/log/conserver", exist_ok=True)
@@ -204,3 +205,69 @@ def test_session_is_logged(stack):
     detach(c)
     time.sleep(0.5)
     assert "log-me-please" in Path("/var/log/conserver/port1.log").read_text()
+
+
+def holders(dev):
+    """conserver PIDs that have the device open (pty slave behind /dev/portN).
+
+    socat itself also keeps the slave open, so only conserver processes count.
+    """
+    target = os.path.realpath(dev)
+    pids = set()
+    for fd in Path("/proc").glob("[0-9]*/fd/*"):
+        try:
+            if os.path.realpath(fd) == target:
+                pid = fd.parts[2]
+                if Path(f"/proc/{pid}/comm").read_text().strip() == "conserver":
+                    pids.add(int(pid))
+        except OSError:
+            pass
+    return pids
+
+
+def ctl(*args):
+    env = {**os.environ, "PYTHONPATH": str(REPO)}
+    r = subprocess.run([sys.executable, "-m", "termserv.cli", "-f", "/etc/termserv/ports.yaml", *args],
+                       env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def wait_for(cond, timeout=10):
+    end = time.time() + timeout
+    while time.time() < end:
+        if cond():
+            return True
+        time.sleep(0.2)
+    return False
+
+
+def test_release_frees_device_and_grab_takes_it_back(stack):
+    assert holders("/dev/port1"), "conserver should hold port 1 while it is managed"
+    ctl("release", "1")
+    assert wait_for(lambda: not holders("/dev/port1")), "device still held after release"
+    assert "released" in ctl("list")
+    # SSH users get a clear message instead of a hang
+    r = subprocess.run(ssh("alice", 2001, "-tt"), capture_output=True, text=True, timeout=15)
+    assert "released for local use" in r.stdout + r.stderr  # -tt: stderr arrives on the pty
+    # port 2 is untouched by releasing port 1
+    c = attach("carol", 2002)
+    c.send("still-here\r")
+    c.expect("switch1# you said: still-here")
+    detach(c)
+    ctl("grab", "1")
+    assert wait_for(lambda: bool(holders("/dev/port1"))), "device not reopened after grab"
+    c = attach("alice", 2001)
+    c.send("back\r")
+    c.expect("router1# you said: back")
+    detach(c)
+
+
+def test_ondemand_port_only_open_while_connected(stack):
+    assert wait_for(lambda: not holders("/dev/port2")), "ondemand port held with nobody attached"
+    c = attach("carol", 2002)
+    c.send("hi\r")
+    c.expect("switch1# you said: hi")
+    assert holders("/dev/port2")
+    detach(c)
+    assert wait_for(lambda: not holders("/dev/port2")), "ondemand port not closed after last user left"

@@ -7,6 +7,7 @@ running system.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -14,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import render
+from . import model
 from .model import Config, write_atomic
 
 SSHD_SERVICE = "termserv-sshd.service"
@@ -38,11 +40,13 @@ def _run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
     return proc
 
 
-def check(cfg: Config) -> dict[str, str]:
+def check(cfg: Config, released: set[int] | None = None) -> dict[str, str]:
     """Render and syntax-check everything. Returns the rendered files."""
     cfg.validate()
+    if released is None:
+        released = model.released_ports()
     files = {
-        "conserver_cf": render.conserver_cf(cfg),
+        "conserver_cf": render.conserver_cf(cfg, released),
         "sshd_config": render.sshd_config(cfg),
         "udev_rules": render.udev_rules(cfg),
     }
@@ -78,9 +82,7 @@ def apply(cfg: Config, paths: Paths = Paths(), reload: bool = True) -> list[str]
 
     if not reload:
         return log
-    # conserver re-reads its config on SIGHUP without dropping sessions.
-    _run(["systemctl", "reload-or-restart", CONSERVER_SERVICE])
-    log.append(f"reloaded {CONSERVER_SERVICE}")
+    log.append(reload_conserver())
     if files["sshd_config"]:
         # Restart (not reload) so Port changes take effect; open sessions survive
         # because the unit uses KillMode=process.
@@ -90,4 +92,41 @@ def apply(cfg: Config, paths: Paths = Paths(), reload: bool = True) -> list[str]
     else:
         _run(["systemctl", "stop", SSHD_SERVICE], check=False)
         log.append(f"no ports enabled: stopped {SSHD_SERVICE}")
+    return log
+
+
+def reload_conserver() -> str:
+    """Make conserver re-read its config (SIGHUP). Open sessions on unchanged ports stay up."""
+    if os.path.isdir("/run/systemd/system"):
+        _run(["systemctl", "reload-or-restart", CONSERVER_SERVICE])
+        return f"reloaded {CONSERVER_SERVICE}"
+    # No systemd (containers, tests): signal the oldest conserver process, the master.
+    _run(["pkill", "-o", "-HUP", "-x", "conserver"])
+    return "sent SIGHUP to conserver"
+
+
+def set_released(cfg: Config, number: int, released: bool, paths: Paths = Paths(), reload: bool = True) -> list[str]:
+    """Hand one port back to the OS (released=True) or take it back for termserv.
+
+    Only conserver's config changes: the SSH port stays open and tells users the
+    port is released. Release state lives in /run, so a reboot undoes it.
+    """
+    port = cfg.port(number)
+    if port is None:
+        raise ApplyError(f"port {number} does not exist")
+    if not port.enabled:
+        raise ApplyError(f"port {number} is disabled; nothing to {'release' if released else 'grab'}")
+    state = model.released_ports()
+    state = state | {number} if released else state - {number}
+    text = render.conserver_cf(cfg, state)
+    with tempfile.TemporaryDirectory() as tmp:
+        cf = Path(tmp) / "conserver.cf"
+        cf.write_text(text)
+        if shutil.which("conserver"):
+            _run(["conserver", "-S", "-C", str(cf)])
+    model.set_released(number, released)
+    write_atomic(paths.conserver_cf, text)
+    log = [f"port {number} {'released for local use' if released else 'back under termserv'}"]
+    if reload:
+        log.append(reload_conserver())
     return log

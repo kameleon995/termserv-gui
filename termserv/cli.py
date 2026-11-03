@@ -21,10 +21,15 @@ def _load(args) -> model.Config:
 def cmd_list(args) -> int:
     cfg = _load(args)
     status = discover.console_status(port=cfg.settings.conserver_port) if args.status else {}
+    released = model.released_ports()
     print(f"{'PORT':<5} {'SSH':<6} {'NAME':<16} {'DEVICE':<28} {'BAUD':<7} {'PAR':<5} {'ON':<3} STATUS")
     for p in sorted(cfg.ports, key=lambda p: p.number):
         st = status.get(p.console)
         st_txt = f"{st.state} {','.join(st.users)}".strip() if st else ""
+        if p.number in released:
+            st_txt = "released (local use)"
+        elif p.ondemand and args.status and not st_txt:
+            st_txt = "ondemand"
         print(
             f"{p.number:<5} {cfg.ssh_port(p):<6} {p.name or '-':<16} {p.device_path():<28} "
             f"{p.baud:<7} {p.parity:<5} {'yes' if p.enabled else 'no':<3} {st_txt}"
@@ -44,6 +49,8 @@ def cmd_set(args) -> int:
             setattr(p, field, v)
     if args.groups is not None:
         p.groups = [g for g in args.groups.split(",") if g]
+    if args.ondemand is not None:
+        p.ondemand = args.ondemand
     if args.enable:
         p.enabled = True
     if args.disable:
@@ -88,6 +95,28 @@ def cmd_apply(args) -> int:
     return 0
 
 
+def cmd_release(args) -> int:
+    for line in applymod.set_released(_load(args), args.number, True):
+        print(line)
+    print(f"port {args.number} device is free; run 'termservctl grab {args.number}' when done "
+          "(a reboot also gives it back)")
+    return 0
+
+
+def cmd_grab(args) -> int:
+    for line in applymod.set_released(_load(args), args.number, False):
+        print(line)
+    return 0
+
+
+def cmd_regen_conserver(args) -> int:
+    """Used by termserv-conserver.service at start: rebuild conserver.cf so ports
+    released before a reboot come back."""
+    files = applymod.check(_load(args))
+    model.write_atomic(applymod.Paths().conserver_cf, files["conserver_cf"])
+    return 0
+
+
 def cmd_usb(args) -> int:
     devs = discover.usb_serial_devices()
     if not devs:
@@ -117,6 +146,11 @@ def main(argv: list[str] | None = None) -> int:
     g = s.add_mutually_exclusive_group()
     g.add_argument("--enable", action="store_true")
     g.add_argument("--disable", action="store_true")
+    g = s.add_mutually_exclusive_group()
+    g.add_argument("--ondemand", dest="ondemand", action="store_true", default=None,
+                   help="open the device only while someone is connected")
+    g.add_argument("--no-ondemand", dest="ondemand", action="store_false",
+                   help="keep the device open and logged all the time (default)")
     s.set_defaults(func=cmd_set)
 
     s = sub.add_parser("remove", help="delete a port")
@@ -132,6 +166,16 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("apply", help="write config and reload services")
     s.add_argument("--no-reload", action="store_true", help="write files only")
     s.set_defaults(func=cmd_apply)
+
+    s = sub.add_parser("release", help="free one port for local use (e.g. screen) until grab or reboot")
+    s.add_argument("number", type=int)
+    s.set_defaults(func=cmd_release)
+
+    s = sub.add_parser("grab", help="take a released port back")
+    s.add_argument("number", type=int)
+    s.set_defaults(func=cmd_grab)
+
+    sub.add_parser("regen-conserver", help=argparse.SUPPRESS).set_defaults(func=cmd_regen_conserver)
 
     sub.add_parser("usb", help="list USB serial adapters and their USB paths").set_defaults(func=cmd_usb)
 

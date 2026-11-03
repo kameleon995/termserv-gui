@@ -15,6 +15,13 @@ case "$cport" in
   ''|*[!0-9]*) echo "termserv: bad conserver port" >&2; exit 1 ;;
 esac
 
+if [ -e "/run/termserv/released/$console_name" ]; then
+  n=${console_name#port}
+  printf '[termserv] %s is released for local use on %s (an admin runs: termservctl grab %s)\r\n' \
+    "$console_name" "$(hostname)" "$n" >&2
+  exit 1
+fi
+
 if [ ! -t 0 ]; then
   echo "termserv: a terminal is required (use ssh -t)" >&2
   exit 1

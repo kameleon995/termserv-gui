@@ -11,6 +11,9 @@ from pathlib import Path
 import yaml
 
 DEFAULT_PORTS_FILE = Path("/etc/termserv/ports.yaml")
+# Ports handed back for local use (termservctl release). Lives in /run on
+# purpose: a reboot gives every port back to termserv.
+RELEASE_DIR = Path(os.environ.get("TERMSERV_RELEASE_DIR", "/run/termserv/released"))
 
 PARITIES = ("none", "even", "odd")
 BAUDS = (1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600)
@@ -36,6 +39,9 @@ class Port:
     groups: list[str] = field(default_factory=list)
     # udev ID_PATH of the USB-serial adapter; when set, a udev rule creates /dev/portN.
     usb_path: str = ""
+    # Open the device only while someone is connected (frees it otherwise, but
+    # nothing is logged while nobody is attached).
+    ondemand: bool = False
 
     @property
     def console(self) -> str:
@@ -125,6 +131,8 @@ class Config:
                     d.pop(k)
             if not d["groups"]:
                 d.pop("groups")
+            if not d["ondemand"]:
+                d.pop("ondemand")
             ports.append(d)
         return {"settings": asdict(self.settings), "ports": ports}
 
@@ -166,3 +174,26 @@ def write_atomic(path: Path, text: str, mode: int = 0o644) -> None:
         if os.path.exists(tmp):
             os.unlink(tmp)
         raise
+
+
+# --- released ports (runtime state, not config) ----------------------------
+
+def released_ports(release_dir: Path | None = None) -> set[int]:
+    d = release_dir or RELEASE_DIR
+    out = set()
+    if d.is_dir():
+        for f in d.iterdir():
+            m = re.fullmatch(r"port(\d+)", f.name)
+            if m:
+                out.add(int(m.group(1)))
+    return out
+
+
+def set_released(number: int, released: bool, release_dir: Path | None = None) -> None:
+    d = release_dir or RELEASE_DIR
+    marker = d / f"port{number}"
+    if released:
+        d.mkdir(parents=True, exist_ok=True)
+        marker.touch()
+    else:
+        marker.unlink(missing_ok=True)

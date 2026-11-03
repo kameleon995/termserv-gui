@@ -49,6 +49,16 @@ bound to localhost).
 The first user on a port gets write access; later users watch read-only.
 Logs are in `/var/log/conserver/portN.log`.
 
+## Using a port locally (cable tests)
+
+```sh
+sudo termservctl release 1        # conserver lets go of port 1; other ports keep running
+sudo screen /dev/port1 115200     # or add yourself to dialout to skip sudo
+sudo termservctl grab 1           # back under termserv (a reboot also does this)
+```
+
+While a port is released, `ssh -p 2001` says so instead of connecting.
+
 ## ports.yaml
 
 See [examples/ports.yaml](examples/ports.yaml). SSH port = `base_port + number`.
@@ -62,6 +72,7 @@ See [examples/ports.yaml](examples/ports.yaml). SSH port = `base_port + number`.
 | `baud`, `parity` | line settings (8 data bits, 1 stop bit) |
 | `groups` | Linux groups allowed on this port (default: `settings.ssh_group`) |
 | `enabled` | `false` closes the SSH port and drops the console |
+| `ondemand` | `true` opens the device only while someone is connected, so it is free otherwise; nothing is logged while nobody is attached |
 
 ## termservctl
 
@@ -69,6 +80,8 @@ See [examples/ports.yaml](examples/ports.yaml). SSH port = `base_port + number`.
 termservctl list [--status]     show ports (and who is connected)
 termservctl set N [--name ...]  add or change a port
 termservctl remove N
+termservctl release N           free port N for local use (screen, minicom) until grab or reboot
+termservctl grab N              take a released port back
 termservctl usb                 list USB serial adapters and their USB paths
 termservctl render sshd|conserver|udev
 termservctl check               validate + syntax-check generated config
@@ -92,6 +105,11 @@ sudo TERMSERV_E2E=1 python3 -m pytest -v tests/e2e
 ```
 
 ## Notes
+
+- `set`, `remove`, `release`, `grab`, `apply` and `check` need sudo; `list`, `usb`
+  and `render` do not.
+- The service names are `termserv-conserver` and `termserv-sshd`. Ubuntu's own
+  `conserver-server` stays disabled; started by hand it exits with "no consoles found".
 
 - Restarting `termserv-sshd` after a config change keeps open serial sessions
   (`KillMode=process`).
