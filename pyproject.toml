@@ -26,8 +26,10 @@ termservctl = "termserv.cli:main"
 termserv-web = "termserv.web.app:main"
 termserv-tui = "termserv.tui:main"
 
-[tool.setuptools]
-packages = ["termserv", "termserv.web"]
+[tool.setuptools.packages.find]
+# Picks up termserv.web.static/templates as data-only (namespace) packages, which
+# keeps setuptools from warning that they are "absent from packages".
+include = ["termserv*"]
 
 [tool.setuptools.package-data]
 "termserv.web" = ["templates/*.html", "static/*"]
