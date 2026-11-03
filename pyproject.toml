@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "termserv"
+version = "0.1.0"
+description = "Serial console server: SSH port 2000+N reaches serial port N, managed from a web UI and a TUI"
+requires-python = ">=3.10"
+dependencies = ["PyYAML>=5.4"]
+
+[project.optional-dependencies]
+test = ["pytest", "pexpect"]
+
+[project.scripts]
+termservctl = "termserv.cli:main"
+
+[tool.setuptools]
+packages = ["termserv"]

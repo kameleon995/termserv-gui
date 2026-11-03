@@ -1,0 +1,28 @@
+#!/bin/sh
+# Attach an SSH session to one conserver console.
+# Called by the termserv sshd via: ForceCommand serial-attach <console> [conserver-port]
+# The console name comes from sshd_config, never from the user, but check it anyway.
+set -eu
+
+console_name=${1:-}
+cport=${2:-782}
+
+case "$console_name" in
+  port[0-9]|port[0-9][0-9]|port[0-9][0-9][0-9]) ;;
+  *) echo "termserv: bad console name" >&2; exit 1 ;;
+esac
+case "$cport" in
+  ''|*[!0-9]*) echo "termserv: bad conserver port" >&2; exit 1 ;;
+esac
+
+if [ ! -t 0 ]; then
+  echo "termserv: a terminal is required (use ssh -t)" >&2
+  exit 1
+fi
+
+printf '[termserv] %s on %s. Escape: Ctrl-E c ?  help, Ctrl-E c .  disconnect\r\n' \
+  "$console_name" "$(hostname)"
+
+# First user gets read-write; later users join read-only and can force
+# write access with Ctrl-E c f.
+exec console -M 127.0.0.1 -p "$cport" "$console_name"

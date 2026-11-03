@@ -1,0 +1,21 @@
+[Unit]
+Description=termserv: SSH access to serial ports (port 2000+N)
+After=network.target termserv-conserver.service
+Wants=termserv-conserver.service
+ConditionPathExists=/etc/termserv/sshd_config
+
+[Service]
+Type=exec
+ExecStartPre=/usr/sbin/sshd -t -f /etc/termserv/sshd_config
+ExecStart=/usr/sbin/sshd -D -e -f /etc/termserv/sshd_config
+ExecReload=/usr/sbin/sshd -t -f /etc/termserv/sshd_config
+ExecReload=/bin/kill -HUP $MAINPID
+# Keep open serial sessions alive when the daemon restarts after a config change.
+KillMode=process
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=sshd
+RuntimeDirectoryPreserve=yes
+
+[Install]
+WantedBy=multi-user.target

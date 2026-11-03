@@ -1,0 +1,17 @@
+[Unit]
+Description=termserv: conserver serial console server (localhost only)
+After=network.target systemd-udev-settle.service
+ConditionPathExists=/etc/termserv/conserver.cf
+
+[Service]
+Type=exec
+# -M 127.0.0.1  listen on localhost only; sshd is the only network front door
+# -o            reopen a downed console when someone connects
+# -O 1          retry downed consoles (e.g. unplugged USB adapters) every minute
+ExecStart=/usr/sbin/conserver -M 127.0.0.1 -C /etc/termserv/conserver.cf -P /etc/termserv/conserver.passwd -o -O 1
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
