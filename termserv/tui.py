@@ -15,7 +15,7 @@ from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Checkbox, DataTable, Footer, Header, Input, Label, RichLog, Select, Static
 
-from . import __version__, model, service
+from . import __version__, discover, model, service
 from .apply import ApplyError
 
 STATE_STYLE = {"up": "green", "down": "red", "released": "cyan", "disabled": "dim", "idle": "dim", "unknown": "yellow"}
@@ -324,7 +324,7 @@ class TermservTUI(App):
         status = self.query_one("#status", Static)
         status.set_class(bool(pending), "pending")
         status.update(f"Unapplied changes in {', '.join(pending)}. Press p to apply." if pending
-                      else f"{len(self.views)} port(s). Connect with ssh -p {cfg.settings.base_port}+N user@{os.uname().nodename}")
+                      else f"{len(self.views)} port(s). Connect with ssh -p {cfg.settings.base_port}+N user@{discover.primary_ip()}")
 
     def selected(self) -> service.PortView | None:
         table = self.query_one("#ports", DataTable)

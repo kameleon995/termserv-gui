@@ -266,3 +266,16 @@ def test_session_store_caps_anonymous_sessions(monkeypatch):
         store.new()
     assert len(store) <= 11
     assert store.get(keep.id)[0] is keep  # logged-in sessions are never evicted for space
+
+
+def test_connect_hint_shows_ip_not_hostname(env, monkeypatch):
+    import socket
+
+    from termserv import discover
+
+    _, client = env
+    login(client)
+    monkeypatch.setattr(discover, "primary_ip", lambda fallback="<address>": "10.1.2.3")
+    page = client.get("/").text
+    assert "user@10.1.2.3" in page
+    assert socket.gethostname() not in page

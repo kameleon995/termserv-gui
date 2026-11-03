@@ -40,9 +40,9 @@ echo "    add users with: usermod -aG serial <user>"
 echo "==> Web UI: PAM login and a self-signed HTTPS certificate"
 install -m 644 systemd/termserv-web.pam /etc/pam.d/termserv-web
 if [ ! -f /etc/termserv/web.crt ]; then
-  host=$(hostname)
-  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=$host" \
-    -addext "subjectAltName=DNS:$host,DNS:$host.local,DNS:localhost,IP:127.0.0.1" \
+  ips=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' | sed 's/^/IP:/' | paste -sd, -)
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=termserv" \
+    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1${ips:+,$ips}" \
     -keyout /etc/termserv/web.key -out /etc/termserv/web.crt 2>/dev/null
   chmod 600 /etc/termserv/web.key
 fi
@@ -56,7 +56,8 @@ echo "==> Generating config and starting services"
 termservctl apply
 systemctl restart termserv-web.service
 port=$(/opt/termserv/bin/python -c "from termserv import model; print(model.load().settings.web_port)")
+addr=$(/opt/termserv/bin/python -c "from termserv.discover import primary_ip; print(primary_ip())")
 echo "==> Done."
-echo "    Serial ports: ssh -p 2001 <user>@$(hostname)"
-echo "    Web UI:       https://$(hostname):$port  (log in as a member of the 'sudo' group)"
+echo "    Serial ports: ssh -p 2001 <user>@$addr"
+echo "    Web UI:       https://$addr:$port  (log in as a member of the 'sudo' group)"
 echo "    TUI:          sudo termserv-tui"

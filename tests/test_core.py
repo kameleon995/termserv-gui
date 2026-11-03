@@ -274,3 +274,13 @@ def test_banner_explains_username():
     assert "@<address>" in text and "(" not in text.splitlines()[1]  # no hostname anywhere
     assert "login will fail" in text
     assert "Banner /etc/termserv/banner" in render.sshd_config(make_cfg()).splitlines()
+
+
+def test_primary_ip_never_returns_hostname():
+    import socket
+
+    from termserv.discover import primary_ip
+
+    ip = primary_ip()
+    assert ip != socket.gethostname()
+    assert ip == "<address>" or any(c.isdigit() for c in ip)

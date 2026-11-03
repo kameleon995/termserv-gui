@@ -197,13 +197,13 @@ def create_app(
         current_user(request)
         cfg = store.load()
         return render(request, "ports.html", cfg=cfg, views=service.port_views(cfg),
-                      services=service.services_status(), hostname=_hostname())
+                      services=service.services_status(), address=_address(request))
 
     @app.get("/partials/ports", response_class=HTMLResponse)
     async def ports_partial(request: Request):
         current_user(request)
         cfg = store.load()
-        return render(request, "_ports_table.html", cfg=cfg, views=service.port_views(cfg), hostname=_hostname())
+        return render(request, "_ports_table.html", cfg=cfg, views=service.port_views(cfg), address=_address(request))
 
     @app.get("/ports/new", response_class=HTMLResponse)
     async def new_port(request: Request):
@@ -318,10 +318,15 @@ def create_app(
     return app
 
 
-def _hostname() -> str:
-    import socket
+def _address(request: Request) -> str:
+    """The IP address this request arrived on, i.e. one the user can reach us at."""
+    server = request.scope.get("server")
+    ip = server[0] if server else ""
+    if not ip or ip in ("0.0.0.0", "::", "127.0.0.1", "::1") or not any(c.isdigit() for c in ip):
+        from ..discover import primary_ip
 
-    return socket.gethostname()
+        return primary_ip()
+    return f"[{ip}]" if ":" in ip else ip
 
 
 def main() -> None:
