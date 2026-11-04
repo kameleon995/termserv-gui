@@ -32,4 +32,5 @@ printf '[termserv] %s on %s. Escape: Ctrl-E c ?  help, Ctrl-E c .  disconnect\r\
 
 # First user gets read-write; later users join read-only and can force
 # write access with Ctrl-E c f.
-exec console -M 127.0.0.1 -p "$cport" "$console_name"
+# -n -C /dev/null: ignore console.cf files, including one in the user's home.
+exec console -n -C /dev/null -M 127.0.0.1 -p "$cport" "$console_name"

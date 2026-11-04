@@ -1,0 +1,25 @@
+#!/bin/sh
+# Restart termserv daemons that still run a program or library an upgrade replaced.
+#
+# apt runs this after every package operation, including unattended-upgrades
+# (/etc/apt/apt.conf.d/99termserv-restart). Distro packages restart their own
+# services (ssh.service) but not ours, so without this a patched OpenSSH, conserver,
+# OpenSSL, PAM or Python would only take effect at the next reboot.
+#
+# termserv-sshd keeps open sessions (KillMode=process). Restarting
+# termserv-conserver disconnects open serial sessions; users simply reconnect.
+command -v systemctl >/dev/null 2>&1 || exit 0
+
+for unit in termserv-sshd termserv-conserver termserv-web; do
+  pid=$(systemctl show -p MainPID --value "$unit.service" 2>/dev/null) || continue
+  case "$pid" in ''|0|*[!0-9]*) continue ;; esac
+  # A replaced file shows up as "<path> (deleted)". Only count system code, not
+  # deleted temp files (e.g. libffi's) that a process may legitimately map.
+  if readlink "/proc/$pid/exe" 2>/dev/null | grep -q ' (deleted)$' ||
+     grep -Eqs ' /(usr|lib|lib64|lib32|bin|sbin|opt)/[^ ]* \(deleted\)$' "/proc/$pid/maps"; then
+    logger -t termserv "restarting $unit: it runs code an upgrade replaced" 2>/dev/null || true
+    echo "termserv: restarting $unit (upgraded code)"
+    systemctl try-restart "$unit.service" || true
+  fi
+done
+exit 0

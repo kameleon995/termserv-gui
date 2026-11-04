@@ -7,7 +7,7 @@ ConditionPathExists=/etc/termserv/web.crt
 Type=exec
 # Runs as root: it edits /etc/termserv, udev rules and group membership, and
 # restarts the termserv services. Login is limited to settings.admin_group.
-ExecStart=/opt/termserv/bin/termserv-web
+ExecStart=/opt/termserv/current/bin/termserv-web
 Restart=on-failure
 RestartSec=2
 
