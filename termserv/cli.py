@@ -128,7 +128,7 @@ UPDATE_SCRIPT = "/usr/local/lib/termserv/termserv-update"
 
 
 def cmd_update(args) -> int:
-    argv = [UPDATE_SCRIPT] + (["--now"] if args.now else [])
+    argv = [UPDATE_SCRIPT] + (["--now"] if args.now else []) + (["--full"] if args.full else [])
     try:
         os.execv(UPDATE_SCRIPT, argv)  # replaces this process; does not return
     except OSError as e:
@@ -276,9 +276,11 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("usb", help="list USB serial adapters and their USB paths").set_defaults(func=cmd_usb)
 
-    s = sub.add_parser("update", help="update termserv's Python libraries now (runs termserv-update)")
+    s = sub.add_parser("update", help="update termserv's Python libraries now; --full also updates termserv (runs termserv-update)")
     s.add_argument("--now", action="store_true",
-                   help="urgent CVE fix: take releases from the last 7 days too")
+                   help="urgent CVE fix: take library releases from the last 7 days too")
+    s.add_argument("--full", action="store_true",
+                   help="also git pull termserv's own code and re-run install.sh if it changed")
     s.set_defaults(func=cmd_update)
 
     for name, what in (("web", "the built-in web UI"), ("cockpit", "the Cockpit plugin")):

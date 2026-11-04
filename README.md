@@ -69,6 +69,10 @@ Updates install themselves; nothing in this repository needs to change for a CVE
   unattended-upgrades installs those fixes too.
 - Kernel and libc fixes need a reboot. To let the machine reboot itself at night,
   uncomment `Automatic-Reboot` in `/etc/apt/apt.conf.d/52termserv-unattended-upgrades`.
+- New termserv code (merged to main): `sudo termservctl update --full` runs
+  `git pull --ff-only` in the checkout `install.sh` was run from (as the checkout's
+  owner) and, if it moved, re-runs `install.sh`. The new code is tested before it goes
+  live; if anything fails, the current version stays. The weekly timer does not do this.
 - Turn the library updates off with `sudo systemctl disable --now termserv-update.timer`.
 
 
@@ -174,7 +178,7 @@ termservctl remove N
 termservctl release N           free port N for local use (screen, minicom) until grab or reboot
 termservctl grab N              take a released port back
 termservctl usb                 list USB serial adapters and their USB paths
-termservctl update [--now]      run termserv-update: rebuild the Python environment now
+termservctl update [--now] [--full]   run termserv-update now; --full also pulls and installs new termserv code
 termservctl render sshd|conserver|udev
 termservctl check               validate + syntax-check generated config
 termservctl apply [--no-reload]
