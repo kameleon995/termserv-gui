@@ -4,6 +4,10 @@ settings:
   ssh_group: serial          # Linux group allowed to use the serial ports
   log_dir: /var/log/conserver
   conserver_port: 782
+  # Management front ends. The Cockpit plugin stays off until you turn it on
+  # (sudo termservctl cockpit enable); the TUI and termservctl always work.
+  web_enabled: true
+  cockpit_enabled: false
 ports:
   - number: 1
     name: router1

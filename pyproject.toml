@@ -7,13 +7,30 @@ name = "termserv"
 version = "0.1.0"
 description = "Serial console server: SSH port 2000+N reaches serial port N, managed from a web UI and a TUI"
 requires-python = ">=3.10"
-dependencies = ["PyYAML>=5.4"]
+dependencies = [
+    "PyYAML>=5.4",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+    "itsdangerous>=2.1",
+    "python-pam>=2.0",
+    "textual>=0.80",
+]
 
 [project.optional-dependencies]
-test = ["pytest", "pexpect"]
+test = ["pytest", "pexpect", "httpx"]
 
 [project.scripts]
 termservctl = "termserv.cli:main"
+termserv-web = "termserv.web.app:main"
+termserv-tui = "termserv.tui:main"
 
-[tool.setuptools]
-packages = ["termserv"]
+[tool.setuptools.packages.find]
+# Picks up termserv.web.static/templates as data-only (namespace) packages, which
+# keeps setuptools from warning that they are "absent from packages".
+include = ["termserv*"]
+
+[tool.setuptools.package-data]
+"termserv.web" = ["templates/*.html", "static/*"]
+"termserv" = ["cockpit/*"]

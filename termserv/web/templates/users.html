@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Users · termserv{% endblock %}
+{% block content %}
+<div class="head"><h1>Users</h1></div>
+<p class="muted">Linux accounts and the groups that give serial port access. Changes take effect on the next SSH login; no apply needed. Create new accounts with <code>sudo adduser</code>.</p>
+<div class="table-wrap">
+<table class="users">
+  <thead><tr><th>User</th>{% for g in groups %}<th>{{ g }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for u in users %}
+    <tr>
+      <td>{{ u.name }}</td>
+      {% for g in groups %}
+      <td>
+        <form method="post" action="/users/{{ u.name }}/groups/{{ g }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="member" value="{{ '0' if g in u.groups else '1' }}">
+          <button class="toggle {{ 'on' if g in u.groups }}" title="{{ 'Remove from' if g in u.groups else 'Add to' }} {{ g }}">{{ 'yes' if g in u.groups else 'no' }}</button>
+        </form>
+      </td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

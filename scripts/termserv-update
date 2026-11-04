@@ -1,0 +1,116 @@
+#!/bin/sh
+# termserv-update: rebuild termserv's Python environment with current library
+# releases (FastAPI, uvicorn, Jinja2, Textual, ...), test it, and switch to it.
+#
+#   termserv-update            what the weekly timer runs: only releases at least
+#                              TERMSERV_UPDATE_DELAY old (default 7 days)
+#   termserv-update --now      urgent CVE fix: no delay (tests and rollback still apply)
+#   termserv-update --install  used by install.sh: always switch to the new build
+#
+# Layout: /opt/termserv/venv-<time> are complete environments, /opt/termserv/current
+# points at the live one, /opt/termserv/dist holds the termserv wheel and
+# /opt/termserv/tests the test suite. The previous environment is kept for rollback.
+#
+# Nothing is switched unless the new environment passes the test suite (run as an
+# unprivileged user, so a test can never touch the real system) and, when the web
+# UI is running, the web UI comes back up on it. Otherwise the old one stays live.
+set -eu
+
+BASE=${TERMSERV_BASE:-/opt/termserv}
+DELAY=${TERMSERV_UPDATE_DELAY:-P7D}
+WEB=termserv-web.service
+mode=update
+case "${1:-}" in
+  "") ;;
+  --now) DELAY="" ;;
+  --install) mode=install ;;
+  -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  *) echo "usage: termserv-update [--now|--install]" >&2; exit 2 ;;
+esac
+[ "$(id -u)" -eq 0 ] || { echo "termserv-update: run as root" >&2; exit 1; }
+
+log() { echo "termserv-update: $*"; }
+umask 022
+
+wheel=$(ls "$BASE"/dist/termserv-*.whl 2>/dev/null | sort -V | tail -n 1)
+[ -n "$wheel" ] || { log "no termserv wheel in $BASE/dist; re-run install.sh"; exit 1; }
+
+new="$BASE/venv-$(date +%Y%m%d-%H%M%S)"
+trap 'rm -rf "$new"' EXIT  # cancelled once the new environment is live
+python3 -m venv "$new"
+pip() { "$new/bin/python" -m pip --disable-pip-version-check --no-input -q "$@"; }
+
+# pip learned --uploaded-prior-to in 26.0; the pip a fresh venv starts with may be older.
+if ! pip install --help | grep -q -- --uploaded-prior-to; then
+  pip install --upgrade "pip>=26.0"
+fi
+delay_arg=""
+if [ -n "$DELAY" ]; then
+  delay_arg="--uploaded-prior-to=$DELAY"
+  pip install --upgrade "$delay_arg" pip
+fi
+log "building $new from $(basename "$wheel")${DELAY:+ (releases older than $DELAY)}"
+# shellcheck disable=SC2086
+pip install $delay_arg "$wheel[test]"
+sha256sum "$wheel" | cut -d' ' -f1 >"$new/.termserv-wheel"
+"$new/bin/python" -m pip freeze --all --exclude-editable >"$new/.termserv-freeze"
+
+cur=""
+[ -L "$BASE/current" ] && cur=$(readlink -f "$BASE/current")
+if [ "$mode" = update ] && [ -n "$cur" ] &&
+   cmp -s "$cur/.termserv-freeze" "$new/.termserv-freeze" &&
+   cmp -s "$cur/.termserv-wheel" "$new/.termserv-wheel"; then
+  log "already up to date"
+  exit 0
+fi
+[ -n "$cur" ] && diff "$cur/.termserv-freeze" "$new/.termserv-freeze" | sed -n 's/^> /    new: /p' || true
+
+log "testing the new environment"
+if [ -d "$BASE/tests" ]; then
+  if ! (cd / && setpriv --reuid=nobody --regid=nogroup --clear-groups \
+          env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/nonexistent TMPDIR=/tmp \
+          "$new/bin/python" -m pytest -q -p no:cacheprovider "$BASE/tests"); then
+    log "tests failed with the new libraries; keeping the current environment"
+    exit 1
+  fi
+else
+  "$new/bin/python" -c "import termserv.cli, termserv.tui, termserv.web.app"
+fi
+
+switch_to() {
+  ln -sfn "$1" "$BASE/.current.new"
+  mv -T "$BASE/.current.new" "$BASE/current"
+}
+web_ok() {
+  i=0
+  while [ $i -lt 15 ]; do
+    systemctl is-active -q "$WEB" || return 1
+    # still running after a few seconds = uvicorn is serving
+    [ $i -ge 5 ] && return 0
+    sleep 1; i=$((i + 1))
+  done
+  return 0
+}
+
+switch_to "$new"
+trap - EXIT
+log "now using $new"
+if [ "$mode" = update ] && command -v systemctl >/dev/null && systemctl is-active -q "$WEB"; then
+  systemctl restart "$WEB" || true
+  if ! web_ok; then
+    if [ -n "$cur" ]; then
+      log "web UI did not start on the new environment; rolling back to $cur"
+      switch_to "$cur"
+      systemctl restart "$WEB" || true
+    fi
+    rm -rf "$new"
+    exit 1
+  fi
+  log "web UI restarted"
+fi
+
+# keep the live environment and the one before it
+for d in "$BASE"/venv-*; do
+  [ -d "$d" ] || continue
+  [ "$d" = "$new" ] || [ "$d" = "$cur" ] || rm -rf "$d"
+done

@@ -1,0 +1,58 @@
+:root {
+  --bg: #ffffff; --fg: #151515; --muted: #6a6e73; --border: #d2d2d2; --row: #f5f5f5;
+  --primary: #0066cc; --primary-fg: #ffffff; --danger: #c9190b; --warn-bg: #fdf7e7; --warn-border: #f0ab00;
+  --ok: #3e8635; --bad: #c9190b; --info: #009596; --err-bg: #faeae8;
+  color-scheme: light;
+}
+:root.dark {
+  --bg: #1b1d21; --fg: #e0e0e0; --muted: #a2a6ab; --border: #44474c; --row: #26292d;
+  --primary: #73bcf7; --primary-fg: #151515; --danger: #fe5142; --warn-bg: #3d2c00; --warn-border: #f0ab00;
+  --ok: #7cc674; --bad: #fe5142; --info: #73c5c5; --err-bg: #470000;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 "Red Hat Text", system-ui, sans-serif; }
+main { padding: 16px 24px; max-width: 1400px; }
+h1 { font-size: 22px; margin: 0 0 4px; font-weight: 500; }
+h2 { font-size: 18px; margin: 0 0 12px; font-weight: 500; }
+.top { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.muted { color: var(--muted); margin: 0; }
+.small { font-size: 12px; margin-top: 12px; }
+code { font-family: "Red Hat Mono", ui-monospace, monospace; }
+button { font: inherit; padding: 5px 14px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--fg); cursor: pointer; }
+button:hover { border-color: var(--primary); }
+button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
+button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+button.link { border: none; padding: 2px 6px; color: var(--primary); }
+button:disabled { opacity: .5; cursor: default; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 600; font-size: 13px; }
+tbody tr:hover { background: var(--row); }
+td.acts { white-space: nowrap; text-align: right; }
+.state-up { color: var(--ok); } .state-down { color: var(--bad); } .state-released { color: var(--info); }
+.state-disabled, .state-idle { color: var(--muted); } .state-unknown { color: var(--warn-border); }
+.badge { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 10px; border: 1px solid var(--bad); color: var(--bad); margin-left: 6px; }
+.banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 8px 12px; margin-bottom: 16px; border-left: 3px solid var(--warn-border); background: var(--warn-bg); }
+.alert { padding: 8px 12px; margin-bottom: 16px; border-left: 3px solid var(--bad); background: var(--err-bg); white-space: pre-wrap; }
+.alert.ok { border-left-color: var(--ok); background: var(--row); }
+pre#log { background: var(--row); border: 1px solid var(--border); padding: 12px; height: 70vh; overflow: auto; white-space: pre-wrap; word-break: break-all; font: 13px/1.35 "Red Hat Mono", ui-monospace, monospace; margin: 0; }
+dialog { border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); padding: 20px 24px; width: min(640px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0, 0, 0, .5); }
+.grid { display: grid; grid-template-columns: 140px 1fr; gap: 10px 12px; align-items: center; margin-bottom: 12px; }
+input, select { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg); color: var(--fg); width: 100%; }
+input[type=checkbox] { width: auto; margin: 0 6px 0 0; }
+label.inline { display: flex; align-items: center; margin: 6px 0; }
+.error { color: var(--bad); min-height: 1.2em; white-space: pre-wrap; }
+@media (max-width: 720px) {
+  main { padding: 12px 16px; }
+  .grid { grid-template-columns: 1fr; }
+  table, thead, tbody, tr, td, th { display: block; }
+  thead { display: none; }
+  tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  td { border: none; padding: 2px 0; }
+  td::before { content: attr(data-label) ": "; color: var(--muted); }
+  td.acts { text-align: left; }
+  td.acts::before { content: ""; }
+}

@@ -14,8 +14,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import render
-from . import model
+from . import frontends, model, render
 from .model import Config, write_atomic
 
 SSHD_SERVICE = "termserv-sshd.service"
@@ -27,6 +26,8 @@ class Paths:
     conserver_cf: Path = Path("/etc/termserv/conserver.cf")
     sshd_config: Path = Path("/etc/termserv/sshd_config")
     udev_rules: Path = Path("/etc/udev/rules.d/99-termserv.rules")
+    banner: Path = Path(render.BANNER_PATH)
+    cockpit_dir: Path = frontends.COCKPIT_DIR
 
 
 class ApplyError(RuntimeError):
@@ -49,6 +50,7 @@ def check(cfg: Config, released: set[int] | None = None) -> dict[str, str]:
         "conserver_cf": render.conserver_cf(cfg, released),
         "sshd_config": render.sshd_config(cfg),
         "udev_rules": render.udev_rules(cfg),
+        "banner": render.banner(cfg),
     }
     with tempfile.TemporaryDirectory() as tmp:
         cf = Path(tmp) / "conserver.cf"
@@ -69,7 +71,8 @@ def apply(cfg: Config, paths: Paths = Paths(), reload: bool = True) -> list[str]
     write_atomic(paths.conserver_cf, files["conserver_cf"])
     log.append(f"wrote {paths.conserver_cf}")
     if files["sshd_config"]:
-        write_atomic(paths.sshd_config, files["sshd_config"])
+        write_atomic(paths.banner, files["banner"])
+        write_atomic(paths.sshd_config, render.sshd_config(cfg, banner_path=str(paths.banner)))
         log.append(f"wrote {paths.sshd_config}")
     old_udev = paths.udev_rules.read_text() if paths.udev_rules.exists() else None
     if old_udev != files["udev_rules"]:
@@ -92,6 +95,7 @@ def apply(cfg: Config, paths: Paths = Paths(), reload: bool = True) -> list[str]
     else:
         _run(["systemctl", "stop", SSHD_SERVICE], check=False)
         log.append(f"no ports enabled: stopped {SSHD_SERVICE}")
+    log += frontends.sync(cfg, paths.cockpit_dir)
     return log
 
 

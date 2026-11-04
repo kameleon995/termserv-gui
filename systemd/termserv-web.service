@@ -1,0 +1,15 @@
+[Unit]
+Description=termserv: web management UI (HTTPS)
+After=network.target
+ConditionPathExists=/etc/termserv/web.crt
+
+[Service]
+Type=exec
+# Runs as root: it edits /etc/termserv, udev rules and group membership, and
+# restarts the termserv services. Login is limited to settings.admin_group.
+ExecStart=/opt/termserv/current/bin/termserv-web
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
