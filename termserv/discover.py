@@ -1,0 +1,76 @@
+"""Find USB-serial adapters and read live console status."""
+
+from __future__ import annotations
+
+import glob
+import os
+import subprocess
+from dataclasses import dataclass
+
+
+@dataclass
+class SerialDevice:
+    node: str  # /dev/ttyUSB0
+    id_path: str  # udev ID_PATH, stable per USB socket
+    vendor: str = ""
+    model: str = ""
+    serial: str = ""
+
+
+def _udev_props(node: str) -> dict[str, str]:
+    try:
+        out = subprocess.run(
+            ["udevadm", "info", "-q", "property", "-n", node],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    props = {}
+    for line in out.splitlines():
+        k, _, v = line.partition("=")
+        props[k] = v
+    return props
+
+
+def usb_serial_devices() -> list[SerialDevice]:
+    devs = []
+    for node in sorted(glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*")):
+        p = _udev_props(node)
+        devs.append(
+            SerialDevice(
+                node=node,
+                id_path=p.get("ID_PATH", ""),
+                vendor=p.get("ID_VENDOR_FROM_DATABASE") or p.get("ID_VENDOR", ""),
+                model=p.get("ID_MODEL_FROM_DATABASE") or p.get("ID_MODEL", ""),
+                serial=p.get("ID_SERIAL_SHORT", ""),
+            )
+        )
+    return devs
+
+
+@dataclass
+class ConsoleStatus:
+    console: str
+    state: str  # "up" / "down" / ...
+    users: list[str]
+
+
+def console_status(master: str = "127.0.0.1", port: int = 782) -> dict[str, ConsoleStatus]:
+    """Parse `console -u`: one line per console, e.g. 'port1  up   rw alice@...'."""
+    try:
+        out = subprocess.run(
+            ["console", "-M", master, "-p", str(port), "-u"],
+            capture_output=True, text=True, timeout=5,
+            env={**os.environ, "USER": os.environ.get("USER", "root")},
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    result = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        name, state, rest = parts[0], parts[1], parts[2:]
+        users = [u for u in rest if "@" in u]
+        result[name] = ConsoleStatus(name, state, users)
+    return result

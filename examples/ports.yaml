@@ -1,0 +1,22 @@
+# termserv port table. SSH port = base_port + number (port 1 -> 2001).
+settings:
+  base_port: 2000
+  ssh_group: serial          # Linux group allowed to use the serial ports
+  log_dir: /var/log/conserver
+  conserver_port: 782
+ports:
+  - number: 1
+    name: router1
+    baud: 115200
+    parity: none
+    enabled: true
+    # USB socket of the adapter (find it with: termservctl usb).
+    # When set, a udev rule creates /dev/port1 for whatever adapter is in that socket.
+    usb_path: platform-3610000.usb-usb-0:1.2:1.0
+  - number: 2
+    name: switch1
+    baud: 9600
+    parity: none
+    enabled: true
+    groups: [serial-lab]     # only this group may use port 2
+    usb_path: platform-3610000.usb-usb-0:1.3:1.0
