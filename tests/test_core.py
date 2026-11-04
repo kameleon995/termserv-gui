@@ -296,3 +296,18 @@ def test_conserver_limits_escape_commands():
     cf = render.conserver_cf(make_cfg())
     access = cf[cf.index("access * {"):]
     assert "limited *;" in access and "trusted 127.0.0.1;" in access
+
+
+def test_cli_update_runs_termserv_update(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli.os, "execv", lambda path, argv: calls.append((path, argv)))
+    assert cli.main(["update"]) == 0
+    assert cli.main(["update", "--now"]) == 0
+    assert calls == [(cli.UPDATE_SCRIPT, [cli.UPDATE_SCRIPT]),
+                     (cli.UPDATE_SCRIPT, [cli.UPDATE_SCRIPT, "--now"])]
+
+
+def test_cli_update_missing_script(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(cli, "UPDATE_SCRIPT", str(tmp_path / "nope"))
+    assert cli.main(["update"]) == 1
+    assert "re-run install.sh" in capsys.readouterr().err

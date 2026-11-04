@@ -62,7 +62,8 @@ Updates install themselves; nothing in this repository needs to change for a CVE
   the previous environment if the web UI does not come back up. Log:
   `journalctl -u termserv-update`.
 - Urgent CVE in a Python library: `sudo termserv-update --now` (no 7-day delay; tests
-  and rollback still apply). Urgent CVE in a package: `sudo unattended-upgrade -v`.
+  and rollback still apply; `sudo termservctl update --now` does the same). Urgent CVE
+  in a package: `sudo unattended-upgrade -v`.
 - conserver is in Ubuntu's *universe* archive, which gets security fixes through
   Ubuntu Pro (free for up to 5 personal machines): `sudo pro attach`. Once attached,
   unattended-upgrades installs those fixes too.
@@ -173,6 +174,7 @@ termservctl remove N
 termservctl release N           free port N for local use (screen, minicom) until grab or reboot
 termservctl grab N              take a released port back
 termservctl usb                 list USB serial adapters and their USB paths
+termservctl update [--now]      run termserv-update: rebuild the Python environment now
 termservctl render sshd|conserver|udev
 termservctl check               validate + syntax-check generated config
 termservctl apply [--no-reload]
