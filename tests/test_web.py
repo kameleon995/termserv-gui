@@ -282,6 +282,19 @@ def test_connect_hint_shows_ip_not_hostname(env, monkeypatch):
     assert socket.gethostname() not in page
 
 
+def test_connect_link_and_copy_button_no_web_shell(env, monkeypatch):
+    from termserv import discover
+
+    _, client = env
+    login(client)
+    monkeypatch.setattr(discover, "primary_ip", lambda fallback="<address>": "10.1.2.3")
+    page = client.get("/").text
+    # port 1 is enabled: the link opens the user's own SSH client, nothing runs in the browser
+    assert 'href="ssh://boss@10.1.2.3:2001"' in page
+    assert 'data-copy="ssh -p 2001 boss@10.1.2.3"' in page
+    assert "ssh://boss@10.1.2.3:2002" not in page  # port 2 is disabled
+
+
 def test_login_limits_follow_ports_yaml_without_restart(env, monkeypatch):
     import asyncio
 

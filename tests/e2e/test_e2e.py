@@ -9,6 +9,7 @@ Uses socat pty pairs as serial ports, so no hardware is needed.
 """
 
 import os
+import pwd
 import shutil
 import subprocess
 import sys
@@ -330,3 +331,48 @@ def test_allowed_escapes_still_work(stack):
     b.expect("router1# you said: typed-after-break")
     detach(b)
     detach(a)
+
+
+# --- termservctl connect (ssh to localhost) ----------------------------------
+
+def connect_as(sudo_user, *args):
+    """termservctl connect run by root under sudo, as an admin in the TUI would."""
+    key = Path(f"/home/{sudo_user}/.ssh/id_ed25519")
+    shutil.copy(WORK / f"{sudo_user}_key", key)  # connect uses the user's own keys
+    shutil.chown(key, sudo_user, sudo_user)
+    os.chmod(key, 0o600)
+    env = {**os.environ, "PYTHONPATH": str(REPO), "SUDO_USER": sudo_user, "TERM": "xterm"}
+    child = pexpect.spawn(sys.executable, ["-m", "termserv.cli", "-f", "/etc/termserv/ports.yaml", "connect", *args],
+                          env=env, timeout=15, encoding="utf-8")
+    child.logfile_read = open(WORK / f"connect-{sudo_user}.transcript", "a")
+    return child
+
+
+def accept_host_key(child):
+    if child.expect([r"continue connecting", r"\[termserv\] port\d"]) == 0:
+        child.sendline("yes")
+        child.expect(r"\[termserv\] port\d")
+
+
+def test_connect_opens_port_as_the_user_behind_sudo(stack):
+    c = connect_as("alice", "router1")
+    accept_host_key(c)
+    c.expect(r"\[(Enter `\^Ec\?' for help|attached|spy|no, \S+ is attached)")
+    c.send("via-connect\r")
+    c.expect("router1# you said: via-connect")
+    # still limited: no hopping to another port
+    c.send("\x05c;")
+    c.expect("unknown -- use")
+    detach(c)
+    # ssh ran as alice, so her known_hosts got the entry (hashed), not root's
+    known = Path("/home/alice/.ssh/known_hosts")
+    assert known.stat().st_uid == pwd.getpwnam("alice").pw_uid
+    assert sh("ssh-keygen", "-F", "[localhost]:2001", "-f", str(known), check=False).returncode == 0
+
+
+def test_connect_respects_port_groups(stack):
+    c = connect_as("alice", "2")
+    c.expect("may not use port 2")
+    c.expect(pexpect.EOF)
+    c.close()
+    assert c.exitstatus == 2

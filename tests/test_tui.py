@@ -265,3 +265,40 @@ def test_settings_screen(store, monkeypatch):
             s = store.load().settings
             assert (s.web_idle_minutes, s.web_max_failures, s.web_lockout_minutes, s.web_enabled) == (30, 3, 20, False)
     run(go())
+
+
+def test_connect_hands_the_terminal_to_ssh(store, monkeypatch):
+    import contextlib
+
+    calls = []
+    monkeypatch.setattr(service, "connect_user", lambda: "alice")
+    monkeypatch.setattr(service, "connect_command", lambda cfg, n, u: ["ssh"])
+    monkeypatch.setattr(service, "connect", lambda cfg, n, u: calls.append((n, u)) or 0)
+
+    async def go():
+        app = TermservTUI(store, live=False)
+        monkeypatch.setattr(app, "suspend", contextlib.nullcontext)
+        async with app.run_test(size=(140, 32)) as pilot:
+            await pilot.press("down", "c")
+            await pilot.pause()
+    run(go())
+    assert calls == [(2, "alice")]
+
+
+def test_connect_refused_shows_why(store, monkeypatch):
+    def refuse(cfg, n, u):
+        raise model.ConfigError("alice may not use port 1")
+
+    monkeypatch.setattr(service, "connect_user", lambda: "alice")
+    monkeypatch.setattr(service, "connect_command", refuse)
+    monkeypatch.setattr(service, "connect", lambda *a: pytest.fail("must not connect"))
+
+    async def go():
+        app = TermservTUI(store, live=False)
+        notes = []
+        monkeypatch.setattr(app, "notify", lambda msg, **kw: notes.append(msg))
+        async with app.run_test(size=(140, 32)) as pilot:
+            await pilot.press("c")
+            await pilot.pause()
+        assert notes == ["alice may not use port 1"]
+    run(go())

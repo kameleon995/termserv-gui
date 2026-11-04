@@ -111,6 +111,14 @@ Logs are in `/var/log/conserver/portN.log`.
 - Turn it off with `sudo termservctl web disable` (or in the TUI settings, `s`).
   The TUI and termservctl keep working; the Cockpit plugin can replace it.
 
+### Connecting from the browser
+
+Each port has **Connect** and **Copy ssh**. Connect is an `ssh://user@host:port`
+link that opens your own terminal's SSH client (most systems have a handler for
+`ssh://`; on Windows, Windows Terminal or PuTTY can register one). Copy ssh copies
+`ssh -p 200N user@host` for pasting. Nothing runs in the browser: there is no web
+shell. The Cockpit plugin has the same two actions.
+
 ## Cockpit plugin
 
 An alternative web UI inside [Cockpit](https://cockpit-project.org/), the Linux
@@ -137,10 +145,13 @@ button at the top). For user/group membership, the page links to Cockpit's
 sudo termserv-tui
 ```
 
-Keys: `a` add, `e`/Enter edit, `d` delete, `r` release/grab, `l` log, `u` users,
+Keys: `a` add, `e`/Enter edit, `c` connect, `d` delete, `r` release/grab, `l` log, `u` users,
 `s` settings (web UI and Cockpit on/off, web idle timeout, failed tries, lockout),
 `p` apply, `q` quit. In forms and dialogs, the arrow keys move between fields and
 buttons (Tab works too); Enter or Space opens a dropdown.
+
+`c` opens the selected port's console right in the TUI's terminal, as the user who
+ran `sudo` (ssh to `localhost` on the port's SSH port); `Ctrl-E c .` brings you back.
 
 ![TUI: editing a port](docs/screenshots/tui-edit.png)
 
@@ -177,6 +188,7 @@ termservctl set N [--name ...]  add or change a port
 termservctl remove N
 termservctl release N           free port N for local use (screen, minicom) until grab or reboot
 termservctl grab N              take a released port back
+termservctl connect N|NAME [--user U]   open port N's console here (alias: open)
 termservctl usb                 list USB serial adapters and their USB paths
 termservctl update [--now] [--full]   run termserv-update now; --full also pulls and installs new termserv code
 termservctl render sshd|conserver|udev
@@ -222,5 +234,9 @@ sudo TERMSERV_E2E=1 python3 -m pytest -v tests/e2e
 - conserver runs with `limited *`, so the console escapes that would leave a port are
   refused: `Ctrl-E c |` (run a command on this server), `Ctrl-E c ;` (switch to another
   port) and `Ctrl-E c z`.
+- `termservctl connect` and the TUI's `c` are shortcuts for `ssh -p 200N <you>@localhost`:
+  they go through the termserv sshd like any remote login, so per-port groups,
+  `PermitRootLogin no`, `ForceCommand serial-attach` and `limited *` all still apply.
+  Under sudo, ssh runs as the user behind sudo (their keys, agent and known_hosts).
 - Console logs (`/var/log/conserver`) record everything typed, so only root and the
   `adm` group can read them. The distro's logrotate job rotates them.

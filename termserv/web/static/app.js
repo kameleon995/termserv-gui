@@ -22,6 +22,25 @@
     }
   }, true);
 
+  // <button data-copy="..."> copies the text (the ssh command for a port).
+  // Delegated, so it keeps working after htmx refreshes the port table.
+  document.addEventListener("click", function (e) {
+    var button = e.target.closest ? e.target.closest("[data-copy]") : null;
+    if (!button) return;
+    var text = button.getAttribute("data-copy");
+    var label = button.textContent;
+    function done(ok) {
+      button.textContent = ok ? "Copied" : label;
+      if (ok) setTimeout(function () { button.textContent = label; }, 1500);
+      else window.prompt("Copy this command:", text);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else {
+      done(false);
+    }
+  });
+
   // Port log: stick to the bottom unless the reader scrolled up.
   function initLog() {
     var log = document.getElementById("log");
