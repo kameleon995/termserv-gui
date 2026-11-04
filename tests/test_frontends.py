@@ -2,6 +2,7 @@
 Cockpit plugin uses."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -32,6 +33,21 @@ def test_defaults():
     s = model.Settings()
     assert (s.web_enabled, s.cockpit_enabled) == (True, False)
     assert (s.web_idle_minutes, s.web_max_failures, s.web_lockout_minutes) == (60, 5, 10)
+
+
+EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "ports.yaml"
+
+
+def test_first_install_leaves_cockpit_plugin_off(store):
+    # install.sh starts from examples/ports.yaml (or no file at all) and runs apply,
+    # which calls sync: even with Cockpit installed, the plugin must not appear.
+    texts = [""] + ([EXAMPLE.read_text()] if EXAMPLE.exists() else [])
+    for text in texts:
+        store.ports_file.write_text(text)
+        cfg = store.load()
+        assert cfg.settings.cockpit_enabled is False
+        frontends.sync(cfg, store.paths.cockpit_dir)
+        assert not (store.paths.cockpit_dir / "termserv").exists()
 
 
 @pytest.mark.parametrize("key,value,msg", [

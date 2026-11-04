@@ -43,7 +43,33 @@ group. The certificate is self-signed, so the browser asks you to accept it once
 on Ubuntu, and the distro's own `conserver-server` service (termserv runs its own,
 bound to localhost).
 
-## Using a port
+## Security updates
+
+Updates install themselves; nothing in this repository needs to change for a CVE fix.
+
+| Component | Comes from | Updated by |
+| --- | --- | --- |
+| OpenSSH (`termserv-sshd`), conserver, PAM, OpenSSL, Python | Ubuntu/Debian packages | `unattended-upgrades`, daily (security pocket) |
+| FastAPI, uvicorn, Jinja2, Textual and other Python libraries | PyPI, in `/opt/termserv/venv-*` | `termserv-update.timer`, weekly |
+| Cockpit (if you install it) | Ubuntu packages | `unattended-upgrades` |
+| Jetson kernel and firmware (`nvidia-l4t-*`) | NVIDIA | by hand, with JetPack (deliberately excluded) |
+
+- After every package upgrade, `restart-outdated` (an apt hook) restarts any termserv
+  daemon still running replaced code. Restarting `termserv-sshd` keeps open sessions;
+  restarting `termserv-conserver` drops them (users reconnect).
+- `termserv-update` builds a new environment with library releases that are at least
+  7 days old, runs the test suite in it as `nobody`, switches over, and goes back to
+  the previous environment if the web UI does not come back up. Log:
+  `journalctl -u termserv-update`.
+- Urgent CVE in a Python library: `sudo termserv-update --now` (no 7-day delay; tests
+  and rollback still apply). Urgent CVE in a package: `sudo unattended-upgrade -v`.
+- conserver is in Ubuntu's *universe* archive, which gets security fixes through
+  Ubuntu Pro (free for up to 5 personal machines): `sudo pro attach`. Once attached,
+  unattended-upgrades installs those fixes too.
+- Kernel and libc fixes need a reboot. To let the machine reboot itself at night,
+  uncomment `Automatic-Reboot` in `/etc/apt/apt.conf.d/52termserv-unattended-upgrades`.
+- Turn the library updates off with `sudo systemctl disable --now termserv-update.timer`.
+
 
 | Keys | Action |
 | --- | --- |
@@ -187,3 +213,8 @@ sudo TERMSERV_E2E=1 python3 -m pytest -v tests/e2e
   (`/etc/termserv/banner`, written by `apply`) says so. The client hides banners
   when run with `-q` or `LogLevel=ERROR`.
 - Ubuntu's `pam_motd` may still print the message of the day on connect.
+- conserver runs with `limited *`, so the console escapes that would leave a port are
+  refused: `Ctrl-E c |` (run a command on this server), `Ctrl-E c ;` (switch to another
+  port) and `Ctrl-E c z`.
+- Console logs (`/var/log/conserver`) record everything typed, so only root and the
+  `adm` group can read them. The distro's logrotate job rotates them.

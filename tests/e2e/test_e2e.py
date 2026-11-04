@@ -281,3 +281,52 @@ def test_banner_tells_user_to_give_a_username(stack):
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
     assert r.returncode == 255
     assert "ssh <username>@" in r.stderr and "login will fail" in r.stderr
+
+
+# --- escape commands that would leave the port -------------------------------
+
+def test_escape_cannot_run_a_local_command(stack):
+    # Ctrl-E c | asks the console client to run a command on this server: a shell
+    # escape past ForceCommand. conserver's "limited *" refuses it.
+    marker = Path("/tmp/termserv-e2e-escape")
+    marker.unlink(missing_ok=True)
+    c = attach("alice", 2001)
+    c.send("\x05c|")
+    c.expect("unknown -- use")
+    c.send(f"id > {marker}\r")
+    c.expect("router1# you said: id >")  # it went to the device instead
+    detach(c)
+    assert not marker.exists()
+
+
+def test_escape_cannot_switch_to_another_port(stack):
+    # Ctrl-E c ; would hop to any console, past port 2's group restriction
+    c = attach("alice", 2001)
+    c.send("\x05c;")
+    c.expect("unknown -- use")
+    c.send("port2\r")
+    c.expect("router1# you said: port2")
+    detach(c)
+
+
+def test_escape_cannot_suspend_client(stack):
+    c = attach("alice", 2001)
+    c.send("\x05cz")
+    c.expect("unknown -- use")
+    detach(c)
+
+
+def test_allowed_escapes_still_work(stack):
+    a = attach("alice", 2001)
+    b = attach("bob", 2001)
+    b.expect("alice@localhost is attached")
+    b.send("\x05cf")  # force write access
+    b.expect(r"bumped alice@localhost")
+    b.send("\x05cl0")  # serial break
+    b.expect(r"\]")
+    b.send("\x05c?")
+    b.expect("disconnect")
+    b.send("typed-after-break\r")
+    b.expect("router1# you said: typed-after-break")
+    detach(b)
+    detach(a)
