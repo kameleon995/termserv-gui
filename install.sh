@@ -108,7 +108,7 @@ else
   echo "    Web UI:       off (sudo termservctl web enable)"
 fi
 if [ "$(setting cockpit_enabled)" = True ]; then
-  echo "    Cockpit:      https://$addr:9090 -> Serial ports"
+  echo "    Cockpit:      https://$addr:<Cockpit port, default 9090> -> Serial ports"
 else
   echo "    Cockpit:      plugin off (sudo apt install cockpit && sudo termservctl cockpit enable)"
 fi
