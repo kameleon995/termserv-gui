@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import apply as applymod
-from . import discover, model, render
+from . import discover, frontends, model, render
 
 SERVICES = (applymod.CONSERVER_SERVICE, applymod.SSHD_SERVICE, "termserv-web.service")
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][A-Za-z0-9]|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -207,6 +207,38 @@ def release(store: Store, number: int) -> list[str]:
 
 def grab(store: Store, number: int) -> list[str]:
     return applymod.set_released(store.load(), number, False, paths=store.paths)
+
+
+# --- management front ends and web login settings ---------------------------
+
+SETTING_FIELDS = ("web_enabled", "cockpit_enabled", "web_idle_minutes", "web_lockout_minutes", "web_max_failures")
+
+
+def frontend_status(store: Store) -> frontends.FrontendStatus:
+    return frontends.status(store.load(), store.paths.cockpit_dir)
+
+
+def save_settings(store: Store, data: dict) -> list[str]:
+    """Change front-end / web-login settings and make the system match right away.
+
+    data holds any of SETTING_FIELDS. Raises model.ConfigError on bad input; nothing
+    is saved then.
+    """
+    cfg = store.load()
+    s = cfg.settings
+    for key, value in data.items():
+        if key not in SETTING_FIELDS:
+            raise model.ConfigError(f"unknown setting {key!r}")
+        if key.endswith("_enabled"):
+            value = value if isinstance(value, bool) else str(value).lower() in ("1", "true", "on", "yes")
+        else:
+            try:
+                value = int(str(value).strip())
+            except ValueError:
+                raise model.ConfigError(f"{key.replace('_', ' ')} must be a number") from None
+        setattr(s, key, value)
+    store.save(cfg)  # validates
+    return frontends.sync(cfg, store.paths.cockpit_dir)
 
 
 # --- logs and services -----------------------------------------------------

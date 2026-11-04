@@ -20,7 +20,8 @@ def store(tmp_path, monkeypatch):
     (tmp_path / "ports.yaml").write_text(PORTS)
     return service.Store(tmp_path / "ports.yaml", applymod.Paths(
         conserver_cf=tmp_path / "conserver.cf", sshd_config=tmp_path / "sshd_config",
-        udev_rules=tmp_path / "99-termserv.rules", banner=tmp_path / "banner"))
+        udev_rules=tmp_path / "99-termserv.rules", banner=tmp_path / "banner",
+        cockpit_dir=tmp_path / "cockpit"))
 
 
 def run(coro):
@@ -233,4 +234,34 @@ def test_long_dialog_text_wraps(store, width):
             assert q.region.height * q.region.width >= len(text) * 0.9  # every word got room
             if width == 60:
                 assert q.region.height > 1  # wrapped onto several lines
+    run(go())
+
+
+def test_settings_screen(store, monkeypatch):
+    from termserv import frontends
+    from termserv.tui import SettingsForm
+
+    monkeypatch.setattr(frontends, "_systemd", lambda: False)
+
+    async def go():
+        app = TermservTUI(store, live=False)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.press("s")
+            await pilot.pause()
+            form = app.screen
+            assert isinstance(form, SettingsForm)
+            assert form.query_one("#web_idle_minutes").value == "60"
+            form.query_one("#web_idle_minutes").value = "0"
+            form.query_one("#save").press()
+            await pilot.pause()
+            assert "1..1440" in str(form.query_one("#error").render())  # stays open with the error
+            form.query_one("#web_idle_minutes").value = "30"
+            form.query_one("#web_max_failures").value = "3"
+            form.query_one("#web_lockout_minutes").value = "20"
+            form.query_one("#web_enabled").value = False
+            form.query_one("#save").press()
+            await pilot.pause()
+            assert not isinstance(app.screen, SettingsForm)
+            s = store.load().settings
+            assert (s.web_idle_minutes, s.web_max_failures, s.web_lockout_minutes, s.web_enabled) == (30, 3, 20, False)
     run(go())

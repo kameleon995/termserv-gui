@@ -50,14 +50,25 @@ fi
 install -m 644 systemd/termserv-conserver.service systemd/termserv-sshd.service \
   systemd/termserv-web.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable termserv-conserver.service termserv-sshd.service termserv-web.service
+systemctl enable termserv-conserver.service termserv-sshd.service
 
 echo "==> Generating config and starting services"
+# apply also starts/stops the web UI and installs/removes the Cockpit plugin
+# to match settings.web_enabled / settings.cockpit_enabled in ports.yaml.
 termservctl apply
-systemctl restart termserv-web.service
-port=$(/opt/termserv/bin/python -c "from termserv import model; print(model.load().settings.web_port)")
+setting() { /opt/termserv/bin/python -c "from termserv import model; print(model.load().settings.$1)"; }
+[ "$(setting web_enabled)" = True ] && systemctl restart termserv-web.service  # pick up new code
 addr=$(/opt/termserv/bin/python -c "from termserv.discover import primary_ip; print(primary_ip())")
 echo "==> Done."
 echo "    Serial ports: ssh -p 2001 <user>@$addr"
-echo "    Web UI:       https://$addr:$port  (log in as a member of the 'sudo' group)"
+if [ "$(setting web_enabled)" = True ]; then
+  echo "    Web UI:       https://$addr:$(setting web_port)  (log in as a member of the 'sudo' group)"
+else
+  echo "    Web UI:       off (sudo termservctl web enable)"
+fi
+if [ "$(setting cockpit_enabled)" = True ]; then
+  echo "    Cockpit:      https://$addr:9090 -> Serial ports"
+else
+  echo "    Cockpit:      plugin off (sudo apt install cockpit && sudo termservctl cockpit enable)"
+fi
 echo "    TUI:          sudo termserv-tui"

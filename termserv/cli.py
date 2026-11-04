@@ -7,11 +7,13 @@ for the proof of concept.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 from . import apply as applymod
-from . import discover, model, render
+from . import discover, frontends, model, render, service
 
 
 def _load(args) -> model.Config:
@@ -61,13 +63,7 @@ def cmd_set(args) -> int:
 
 
 def cmd_remove(args) -> int:
-    cfg = _load(args)
-    before = len(cfg.ports)
-    cfg.ports = [p for p in cfg.ports if p.number != args.number]
-    if len(cfg.ports) == before:
-        print(f"port {args.number} not found", file=sys.stderr)
-        return 1
-    model.save(cfg, args.file)
+    service.delete_port(_store(args), args.number)  # also drops a release marker
     print(f"removed port {args.number}")
     return 0
 
@@ -126,6 +122,92 @@ def cmd_usb(args) -> int:
     return 0
 
 
+# --- front ends and settings -------------------------------------------------
+
+def _store(args) -> service.Store:
+    return service.Store(args.file)
+
+
+def _print_log(log: list[str]) -> None:
+    for line in log:
+        print(line)
+
+
+def cmd_frontend(args) -> int:
+    """termservctl web|cockpit enable|disable|status"""
+    key = "web_enabled" if args.cmd == "web" else "cockpit_enabled"
+    store = _store(args)
+    if args.action == "status":
+        st = service.frontend_status(store)
+        if args.cmd == "web":
+            print(f"web UI: {'enabled' if st.web_enabled else 'disabled'} (service {st.web_active}), "
+                  f"port {store.load().settings.web_port}")
+        else:
+            print(f"Cockpit plugin: {'enabled' if st.cockpit_enabled else 'disabled'}, "
+                  f"{'installed' if st.cockpit_plugin_installed else 'not installed'}; "
+                  f"Cockpit {'present' if st.cockpit_installed else 'not installed'}")
+        return 0
+    log = service.save_settings(store, {key: args.action == "enable"})
+    print(f"{'web UI' if args.cmd == 'web' else 'Cockpit plugin'} {args.action}d")
+    _print_log(log)
+    return 0
+
+
+def cmd_settings(args) -> int:
+    store = _store(args)
+    changes = {k: getattr(args, k) for k in service.SETTING_FIELDS if getattr(args, k, None) is not None}
+    if changes:
+        _print_log(service.save_settings(store, changes))
+    s = store.load().settings
+    print(f"web UI:              {'on' if s.web_enabled else 'off'} (port {s.web_port})")
+    print(f"Cockpit plugin:      {'on' if s.cockpit_enabled else 'off'}")
+    print(f"web idle timeout:    {s.web_idle_minutes} min")
+    print(f"web login lockout:   {s.web_lockout_minutes} min after {s.web_max_failures} failed tries")
+    return 0
+
+
+# --- machine-readable interface (used by the Cockpit plugin) ------------------
+
+def cmd_state(args) -> int:
+    store = _store(args)
+    cfg = store.load()
+    views = service.port_views(cfg)
+    ports = []
+    for v in views:
+        d = asdict(v.port)
+        d.update(ssh_port=v.ssh_port, state=v.state, users=v.users, device_present=v.device_present,
+                 socket=v.socket, tty=v.tty, device_path=v.port.device_path())
+        ports.append(d)
+    out = {
+        "address": discover.primary_ip(),
+        "settings": asdict(cfg.settings),
+        "ports": ports,
+        "pending": service.pending_changes(store),
+        "services": service.services_status(),
+        "next_free": service.next_free_number(cfg),
+        "bauds": list(model.BAUDS),
+        "parities": list(model.PARITIES),
+    }
+    if args.sockets_for is not None:
+        port = cfg.port(args.sockets_for) if args.sockets_for else None
+        out["sockets"] = [asdict(c) for c in service.socket_choices(
+            cfg, args.sockets_for or None, port.usb_path if port else "")]
+    json.dump(out, sys.stdout)
+    return 0
+
+
+def cmd_save_port(args) -> int:
+    data = json.load(sys.stdin)
+    service.save_port(_store(args), data, original_number=args.original)
+    print("saved")
+    return 0
+
+
+def cmd_log(args) -> int:
+    sys.stdout.write(service.log_tail(_load(args), args.number))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="termservctl", description="Manage serial-over-SSH ports")
     ap.add_argument("-f", "--file", type=Path, default=model.DEFAULT_PORTS_FILE, help="ports.yaml path")
@@ -179,10 +261,37 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("usb", help="list USB serial adapters and their USB paths").set_defaults(func=cmd_usb)
 
+    for name, what in (("web", "the built-in web UI"), ("cockpit", "the Cockpit plugin")):
+        s = sub.add_parser(name, help=f"turn {what} on or off")
+        s.add_argument("action", choices=["enable", "disable", "status"])
+        s.set_defaults(func=cmd_frontend)
+
+    s = sub.add_parser("settings", help="show or change web UI / Cockpit settings")
+    s.add_argument("--web-idle-minutes", dest="web_idle_minutes", type=int,
+                   help="log web users out after this many idle minutes (1-1440)")
+    s.add_argument("--web-lockout-minutes", dest="web_lockout_minutes", type=int,
+                   help="how long an address is locked out after too many failed logins (1-1440)")
+    s.add_argument("--web-max-failures", dest="web_max_failures", type=int,
+                   help="failed logins allowed before the lockout (1-100)")
+    s.set_defaults(func=cmd_settings)
+
+    s = sub.add_parser("state", help="print everything as JSON (for the Cockpit plugin)")
+    s.add_argument("--sockets-for", type=int, metavar="N",
+                   help="include USB socket choices for port N (0 = a new port)")
+    s.set_defaults(func=cmd_state)
+
+    s = sub.add_parser("save-port", help="add/replace a port from JSON on stdin (for the Cockpit plugin)")
+    s.add_argument("--original", type=int, help="number of the port being edited")
+    s.set_defaults(func=cmd_save_port)
+
+    s = sub.add_parser("log", help="print the end of a port's console log")
+    s.add_argument("number", type=int)
+    s.set_defaults(func=cmd_log)
+
     args = ap.parse_args(argv)
     try:
         return args.func(args)
-    except (model.ConfigError, applymod.ApplyError) as e:
+    except (model.ConfigError, applymod.ApplyError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 

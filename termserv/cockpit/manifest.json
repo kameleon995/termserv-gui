@@ -1,0 +1,17 @@
+{
+    "version": 0,
+    "requires": {
+        "cockpit": "239"
+    },
+    "menu": {
+        "index": {
+            "label": "Serial ports",
+            "order": 45,
+            "keywords": [
+                {
+                    "matches": ["serial", "console", "termserv", "conserver", "tty", "uart", "terminal server"]
+                }
+            ]
+        }
+    }
+}

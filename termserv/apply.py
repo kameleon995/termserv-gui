@@ -14,8 +14,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import render
-from . import model
+from . import frontends, model, render
 from .model import Config, write_atomic
 
 SSHD_SERVICE = "termserv-sshd.service"
@@ -28,6 +27,7 @@ class Paths:
     sshd_config: Path = Path("/etc/termserv/sshd_config")
     udev_rules: Path = Path("/etc/udev/rules.d/99-termserv.rules")
     banner: Path = Path(render.BANNER_PATH)
+    cockpit_dir: Path = frontends.COCKPIT_DIR
 
 
 class ApplyError(RuntimeError):
@@ -95,6 +95,7 @@ def apply(cfg: Config, paths: Paths = Paths(), reload: bool = True) -> list[str]
     else:
         _run(["systemctl", "stop", SSHD_SERVICE], check=False)
         log.append(f"no ports enabled: stopped {SSHD_SERVICE}")
+    log += frontends.sync(cfg, paths.cockpit_dir)
     return log
 
 

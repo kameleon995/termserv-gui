@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Serial ports</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="termserv.css">
+  <script src="../base1/cockpit.js"></script>
+  <script src="termserv.js" defer></script>
+</head>
+<body>
+  <main>
+    <header class="top">
+      <div>
+        <h1>Serial ports</h1>
+        <p class="muted" id="howto"></p>
+      </div>
+      <div class="actions">
+        <button type="button" id="add" class="primary">Add port</button>
+        <button type="button" id="users">Users…</button>
+      </div>
+    </header>
+
+    <div id="alert" class="alert" hidden></div>
+    <div id="pending" class="banner warn" hidden>
+      <span id="pending-text"></span>
+      <button type="button" id="apply" class="primary">Apply changes</button>
+    </div>
+
+    <section id="ports-view">
+      <table id="ports">
+        <thead>
+          <tr><th>Port</th><th>SSH</th><th>Name</th><th>Adapter</th><th>Line</th><th>Access</th><th>State</th><th>Connected</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p id="empty" class="muted" hidden>No ports yet. Use <b>Add port</b>.</p>
+      <p class="muted small" id="services"></p>
+    </section>
+
+    <section id="log-view" hidden>
+      <div class="top">
+        <h2 id="log-title"></h2>
+        <div class="actions">
+          <label class="inline"><input type="checkbox" id="log-follow" checked> Follow</label>
+          <button type="button" id="log-back">Back</button>
+        </div>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <dialog id="form-dialog">
+    <form id="port-form" method="dialog">
+      <h2 id="form-title"></h2>
+      <div class="grid">
+        <label for="f-number">Port number</label>
+        <input id="f-number" name="number" type="number" min="1" max="512" required>
+        <label for="f-name">Name</label>
+        <input id="f-name" name="name" placeholder="router1" maxlength="32">
+        <label for="f-usb">USB socket</label>
+        <select id="f-usb" name="usb_path"></select>
+        <label for="f-device">Device path</label>
+        <input id="f-device" name="device">
+        <label for="f-baud">Baud rate</label>
+        <select id="f-baud" name="baud"></select>
+        <label for="f-parity">Parity</label>
+        <select id="f-parity" name="parity"></select>
+        <label for="f-groups">Allowed groups</label>
+        <input id="f-groups" name="groups" placeholder="empty = everyone in the serial group">
+      </div>
+      <label class="inline"><input type="checkbox" id="f-enabled" name="enabled"> Enabled</label>
+      <label class="inline"><input type="checkbox" id="f-ondemand" name="ondemand"> Open only while someone is connected (no logging while idle)</label>
+      <p id="form-error" class="error"></p>
+      <div class="actions">
+        <button type="submit" class="primary" value="save">Save</button>
+        <button type="button" id="form-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog">
+    <p id="confirm-text"></p>
+    <div class="actions">
+      <button type="button" id="confirm-yes" class="danger">Yes</button>
+      <button type="button" id="confirm-no">No</button>
+    </div>
+  </dialog>
+</body>
+</html>

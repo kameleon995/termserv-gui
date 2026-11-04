@@ -63,8 +63,9 @@ Logs are in `/var/log/conserver/portN.log`.
 - **Users**: which Linux accounts are in each access group (`serial` plus any
   per-port groups); click to add or remove. Takes effect on the next SSH login.
 - Login uses PAM (`/etc/pam.d/termserv-web`) and is limited to
-  `settings.admin_group` (default `sudo`). Five failed logins from one address
-  lock it out for 10 minutes.
+  `settings.admin_group` (default `sudo`). After `settings.web_max_failures`
+  (default 5) failed logins from one address, it is locked out for
+  `settings.web_lockout_minutes` (default 10).
 - Sessions live on the server; the browser only gets a random id in a cookie with
   no expiry date (HttpOnly, Secure, SameSite=Strict), so it is gone when the
   browser closes. A session ends after `settings.web_idle_minutes` (default 60)
@@ -74,6 +75,30 @@ Logs are in `/var/log/conserver/portN.log`.
   scripts), deny framing and are never cached.
 - Service: `termserv-web`, port `settings.web_port` (default 8443), certificate in
   `/etc/termserv/web.crt` (replace it with your own if you like).
+- Timeout and lockout changes (from the TUI or `termservctl settings`) take effect
+  without a restart; nobody is logged out.
+- Turn it off with `sudo termservctl web disable` (or in the TUI settings, `s`).
+  The TUI and termservctl keep working; the Cockpit plugin can replace it.
+
+## Cockpit plugin
+
+An alternative web UI inside [Cockpit](https://cockpit-project.org/), the Linux
+web console: a **Serial ports** page with the same port table, add/edit, delete,
+release/grab, log viewer and **Apply changes**. It uses Cockpit's login, HTTPS
+and sudo, and does everything through `termservctl`, so validation is the same
+as everywhere else.
+
+```sh
+sudo apt install cockpit
+sudo termservctl cockpit enable   # copies the plugin to /usr/share/cockpit/termserv
+sudo termservctl web disable      # optional: Cockpit only
+```
+
+Open `https://<address>:9090`, log in, and choose **Serial ports**. Viewing works
+for any user; changes need **administrative access** (the "Limited access"
+button at the top). For user/group membership, the page links to Cockpit's
+**Accounts**. Cockpit's own idle timeout is set in `/etc/cockpit/cockpit.conf`
+(`[Session] IdleTimeout=`, in minutes, default 15).
 
 ## TUI
 
@@ -82,6 +107,7 @@ sudo termserv-tui
 ```
 
 Keys: `a` add, `e`/Enter edit, `d` delete, `r` release/grab, `l` log, `u` users,
+`s` settings (web UI and Cockpit on/off, web idle timeout, failed tries, lockout),
 `p` apply, `q` quit. In forms and dialogs, the arrow keys move between fields and
 buttons (Tab works too); Enter or Space opens a dropdown.
 
@@ -124,6 +150,10 @@ termservctl usb                 list USB serial adapters and their USB paths
 termservctl render sshd|conserver|udev
 termservctl check               validate + syntax-check generated config
 termservctl apply [--no-reload]
+termservctl web enable|disable|status       built-in web UI on/off
+termservctl cockpit enable|disable|status   Cockpit plugin on/off
+termservctl settings [--web-idle-minutes N] [--web-max-failures N] [--web-lockout-minutes N]
+termservctl state | save-port | log N       JSON/text interface used by the Cockpit plugin
 ```
 
 ## Tests

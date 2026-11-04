@@ -67,6 +67,13 @@ class Settings:
     web_port: int = 8443
     # Web UI sessions end after this many minutes without activity.
     web_idle_minutes: int = 60
+    # After web_max_failures failed logins from one address, logins from it are
+    # refused for web_lockout_minutes.
+    web_max_failures: int = 5
+    web_lockout_minutes: int = 10
+    # Which management front ends are on. The TUI and termservctl always work.
+    web_enabled: bool = True
+    cockpit_enabled: bool = False
 
 
 @dataclass
@@ -96,6 +103,13 @@ class Config:
             errors.append(f"settings.admin_group {s.admin_group!r} is not a valid group name")
         if not (1 <= s.web_idle_minutes <= 1440):
             errors.append(f"settings.web_idle_minutes {s.web_idle_minutes} must be 1..1440")
+        if not (1 <= s.web_max_failures <= 100):
+            errors.append(f"settings.web_max_failures {s.web_max_failures} must be 1..100")
+        if not (1 <= s.web_lockout_minutes <= 1440):
+            errors.append(f"settings.web_lockout_minutes {s.web_lockout_minutes} must be 1..1440")
+        for key in ("web_enabled", "cockpit_enabled"):
+            if not isinstance(getattr(s, key), bool):
+                errors.append(f"settings.{key} must be true or false")
         if not (1 <= s.web_port <= 65535):
             errors.append(f"settings.web_port {s.web_port} must be 1..65535")
         if not s.log_dir.startswith("/"):

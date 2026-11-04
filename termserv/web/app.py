@@ -62,13 +62,35 @@ def create_app(
     throttle: LoginThrottle | None = None,
 ) -> FastAPI:
     store = store or service.Store()
-    if sessions is None:
+    # Unless the caller passes its own, the session store and login throttle follow
+    # settings.web_idle_minutes / web_lockout_minutes / web_max_failures, picked up
+    # from ports.yaml whenever it changes (no restart, nobody gets logged out).
+    follow_settings = sessions is None and throttle is None
+    if sessions is None:  # not `or`: an empty SessionStore is falsy (__len__)
+        sessions = SessionStore()
+    if throttle is None:
+        throttle = LoginThrottle()
+    seen_mtime: list[float | None] = [None]
+
+    def refresh_settings() -> None:
+        if not follow_settings:
+            return
         try:
-            idle = store.load().settings.web_idle_minutes
+            mtime = store.ports_file.stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        if mtime == seen_mtime[0]:
+            return
+        try:
+            s = store.load().settings
         except model.ConfigError:
-            idle = model.Settings().web_idle_minutes
-        sessions = SessionStore(idle_seconds=idle * 60)
-    throttle = throttle or LoginThrottle()
+            return  # keep the last good values
+        seen_mtime[0] = mtime
+        sessions.idle_seconds = s.web_idle_minutes * 60
+        throttle.max_failures = s.web_max_failures
+        throttle.window = s.web_lockout_minutes * 60
+
+    refresh_settings()
     app = FastAPI(title="termserv", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.sessions = sessions
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -77,6 +99,7 @@ def create_app(
 
     @app.middleware("http")
     async def session_middleware(request: Request, call_next):
+        refresh_settings()
         sid = request.cookies.get(COOKIE)
         background = request.headers.get(BACKGROUND_HEADER) == "1"
         sess, timed_out = sessions.get(sid, touch=not background)
