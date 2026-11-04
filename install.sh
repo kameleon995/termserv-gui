@@ -6,13 +6,18 @@ set -eu
 if [ "$(id -u)" -ne 0 ]; then echo "run as root (sudo ./install.sh)" >&2; exit 1; fi
 cd "$(dirname "$0")"
 
-echo "==> Installing packages"
+step_n=0
+total=7
+started=$(date +%s)
+step() { step_n=$((step_n + 1)); echo ">>> ($step_n of $total) $*"; }
+
+step "Installing packages"
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
   conserver-server conserver-client openssh-server python3 python3-venv openssl \
   unattended-upgrades util-linux
 
-echo "==> Stopping services that grab USB serial adapters"
+step "Stopping services that grab USB serial adapters"
 # brltty claims CH340/CH341 adapters; ModemManager probes new serial ports.
 for svc in brltty brltty-udev ModemManager; do
   systemctl disable --now "$svc" 2>/dev/null || true
@@ -22,7 +27,7 @@ done
 systemctl disable --now conserver-server 2>/dev/null || true
 systemctl mask conserver-server 2>/dev/null || true
 
-echo "==> Installing termserv into /opt/termserv"
+step "Installing termserv into /opt/termserv"
 install -d -m 755 /usr/local/lib/termserv /etc/termserv
 install -m 755 scripts/serial-attach scripts/termserv-update scripts/restart-outdated /usr/local/lib/termserv/
 ln -sf /usr/local/lib/termserv/termserv-update /usr/local/sbin/termserv-update
@@ -75,7 +80,7 @@ fi
 getent group serial >/dev/null || groupadd --system serial
 echo "    add users with: usermod -aG serial <user>"
 
-echo "==> Web UI: PAM login and a self-signed HTTPS certificate"
+step "Web UI: PAM login and a self-signed HTTPS certificate"
 install -m 644 systemd/termserv-web.pam /etc/pam.d/termserv-web
 if [ ! -f /etc/termserv/web.crt ]; then
   ips=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' | sed 's/^/IP:/' | paste -sd, -)
@@ -85,6 +90,7 @@ if [ ! -f /etc/termserv/web.crt ]; then
   chmod 600 /etc/termserv/web.key
 fi
 
+step "Installing systemd services"
 install -m 644 systemd/termserv-conserver.service systemd/termserv-sshd.service \
   systemd/termserv-web.service systemd/termserv-update.service systemd/termserv-update.timer \
   /etc/systemd/system/
@@ -93,21 +99,22 @@ systemctl enable termserv-conserver.service termserv-sshd.service
 # pick up unit changes (log permissions, pid file for log rotation)
 systemctl try-restart termserv-conserver.service || true
 
-echo "==> Automatic security updates"
+step "Automatic security updates"
 # Ubuntu packages (OpenSSH, conserver, PAM, OpenSSL, Python): daily via unattended-upgrades,
 # then restart-outdated restarts our daemons. Python libraries: weekly termserv-update.
 install -m 644 apt/52termserv-unattended-upgrades apt/99termserv-restart /etc/apt/apt.conf.d/
 systemctl enable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
 systemctl enable --now termserv-update.timer
 
-echo "==> Generating config and starting services"
+step "Generating config and starting services"
 # apply also starts/stops the web UI and installs/removes the Cockpit plugin
 # to match settings.web_enabled / settings.cockpit_enabled in ports.yaml.
 termservctl apply
 setting() { /opt/termserv/current/bin/python -c "from termserv import model; print(model.load().settings.$1)"; }
 [ "$(setting web_enabled)" = True ] && systemctl restart termserv-web.service  # pick up new code
 addr=$(/opt/termserv/current/bin/python -c "from termserv.discover import primary_ip; print(primary_ip())")
-echo "==> Done."
+t=$(( $(date +%s) - started ))
+echo ">>> Done ($((t / 60))m$((t % 60))s)."
 echo "    Serial ports: ssh -p 2001 <user>@$addr"
 if [ "$(setting web_enabled)" = True ]; then
   echo "    Web UI:       https://$addr:$(setting web_port)  (log in as a member of the 'sudo' group)"
