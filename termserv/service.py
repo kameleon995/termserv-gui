@@ -11,6 +11,7 @@ import os
 import pwd
 import re
 import shutil
+import signal
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -276,7 +277,19 @@ def connect(cfg: model.Config, which: str | int, user: str | None = None) -> int
                    PATH="/usr/local/bin:/usr/bin:/bin")
         kwargs = dict(user=pw.pw_uid, group=pw.pw_gid,
                       extra_groups=os.getgrouplist(pw.pw_name, pw.pw_gid), env=env)
-    return subprocess.run(cmd, **kwargs).returncode
+    # Ctrl-C belongs to ssh (it is in the same process group and gets it too): don't
+    # let it raise KeyboardInterrupt here while ssh is running. A handler, not SIG_IGN,
+    # because an ignored signal would stay ignored in ssh after exec.
+    try:
+        old = signal.signal(signal.SIGINT, lambda *_: None)
+    except ValueError:  # not the main thread
+        old = None
+    try:
+        code = subprocess.run(cmd, **kwargs).returncode
+    finally:
+        if old is not None:
+            signal.signal(signal.SIGINT, old)
+    return 128 - code if code < 0 else code  # killed by a signal: shell-style 128+N
 
 
 # --- management front ends and web login settings ---------------------------

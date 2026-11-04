@@ -478,7 +478,9 @@ class TermservTUI(App):
         except model.ConfigError as e:
             self.notify(str(e), severity="error", timeout=8)
             return
-        if code not in (0, None):
+        if code == 130:
+            self.notify(f"Connection to port {v.number} cancelled")
+        elif code not in (0, None):
             self.notify(f"ssh ended with exit code {code}", severity="warning")
         self.action_refresh()
 

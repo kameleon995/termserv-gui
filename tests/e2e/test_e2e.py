@@ -376,3 +376,40 @@ def test_connect_respects_port_groups(stack):
     c.expect(pexpect.EOF)
     c.close()
     assert c.exitstatus == 2
+
+
+def test_connect_ctrl_c_at_password_prompt_exits_quietly(stack):
+    # bob has no key in ~/.ssh, so ssh asks for a password; Ctrl-C there must not
+    # leave a Python traceback behind
+    for f in Path("/home/bob/.ssh").glob("id_*"):
+        f.unlink()
+    env = {**os.environ, "PYTHONPATH": str(REPO), "SUDO_USER": "bob", "TERM": "xterm"}
+    c = pexpect.spawn(sys.executable, ["-m", "termserv.cli", "-f", "/etc/termserv/ports.yaml", "open", "1"],
+                      env=env, timeout=15, encoding="utf-8")
+    if c.expect([r"continue connecting", r"password:"]) == 0:
+        c.sendline("yes")
+        c.expect(r"password:")
+    c.sendintr()
+    c.expect(pexpect.EOF)
+    c.close()
+    assert "Traceback" not in c.before and "KeyboardInterrupt" not in c.before
+    assert c.exitstatus == 130
+
+
+def test_tui_ctrl_c_at_password_prompt_returns_to_the_tui(stack):
+    for f in Path("/home/bob/.ssh").glob("id_*"):
+        f.unlink()
+    env = {**os.environ, "PYTHONPATH": str(REPO), "SUDO_USER": "bob", "TERM": "xterm-256color"}
+    c = pexpect.spawn(sys.executable, ["-m", "termserv.tui", "-f", "/etc/termserv/ports.yaml"],
+                      env=env, timeout=20, encoding="utf-8", dimensions=(40, 140))
+    c.expect("router1")
+    c.send("c")
+    if c.expect([r"continue connecting", r"password:"]) == 0:
+        c.sendline("yes")
+        c.expect(r"password:")
+    c.sendintr()
+    c.expect("cancelled")  # back in the TUI, which says so
+    assert c.isalive()
+    c.send("q")
+    c.expect(pexpect.EOF)
+    assert "Traceback" not in c.before
