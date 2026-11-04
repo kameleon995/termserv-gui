@@ -1,0 +1,3 @@
+# PAM stack for the termserv web UI: normal Linux passwords.
+@include common-auth
+@include common-account

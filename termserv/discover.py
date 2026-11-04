@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 
@@ -15,6 +16,28 @@ class SerialDevice:
     vendor: str = ""
     model: str = ""
     serial: str = ""
+
+    @property
+    def socket(self) -> str:
+        return usb_socket_label(self.id_path)
+
+
+_SOCKET_RE = re.compile(r"usb(?:v\d+)?-\d+:([\d.]+):\d+\.(\d+)$")
+
+
+def usb_socket_label(id_path: str) -> str:
+    """Short name for a USB socket from its udev ID_PATH.
+
+    "platform-3610000.usb-usb-0:2.1:1.0" -> "USB 2.1" (hub port chain 2 then 1).
+    Interface numbers above 0 (multi-port adapters) are shown too: "USB 2.4 #1".
+    """
+    m = _SOCKET_RE.search(id_path or "")
+    if not m:
+        return id_path or ""
+    label = f"USB {m.group(1)}"
+    if m.group(2) != "0":
+        label += f" #{m.group(2)}"
+    return label
 
 
 def _udev_props(node: str) -> dict[str, str]:
@@ -74,3 +97,21 @@ def console_status(master: str = "127.0.0.1", port: int = 782) -> dict[str, Cons
         users = [u for u in rest if "@" in u]
         result[name] = ConsoleStatus(name, state, users)
     return result
+
+
+def primary_ip(fallback: str = "<address>") -> str:
+    """The address other machines most likely reach this one on: the source address
+    of the default route. Nothing is sent. Falls back to a placeholder when the
+    machine has no network (or only loopback)."""
+    import socket
+
+    for family, probe in ((socket.AF_INET, "192.0.2.1"), (socket.AF_INET6, "2001:db8::1")):
+        try:
+            with socket.socket(family, socket.SOCK_DGRAM) as s:
+                s.connect((probe, 9))
+                ip = s.getsockname()[0]
+        except OSError:
+            continue
+        if ip and not ip.startswith(("127.", "0.")) and ip not in ("::1", "::"):
+            return f"[{ip}]" if ":" in ip else ip
+    return fallback
