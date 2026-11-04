@@ -303,8 +303,10 @@ def test_cli_update_runs_termserv_update(monkeypatch):
     monkeypatch.setattr(cli.os, "execv", lambda path, argv: calls.append((path, argv)))
     assert cli.main(["update"]) == 0
     assert cli.main(["update", "--now"]) == 0
+    assert cli.main(["update", "--full"]) == 0
     assert calls == [(cli.UPDATE_SCRIPT, [cli.UPDATE_SCRIPT]),
-                     (cli.UPDATE_SCRIPT, [cli.UPDATE_SCRIPT, "--now"])]
+                     (cli.UPDATE_SCRIPT, [cli.UPDATE_SCRIPT, "--now"]),
+                     (cli.UPDATE_SCRIPT, [cli.UPDATE_SCRIPT, "--full"])]
 
 
 def test_cli_update_missing_script(monkeypatch, tmp_path, capsys):

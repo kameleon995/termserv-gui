@@ -54,6 +54,13 @@ for cmd in termservctl termserv-tui; do
   ln -sf /opt/termserv/current/bin/$cmd /usr/local/bin/$cmd
 done
 [ -n "$legacy" ] && rm -rf "$legacy"
+# Remember this checkout so termserv-update can pull new termserv code from it.
+pwd -P >/etc/termserv/source
+if command -v git >/dev/null && rev=$(git -c safe.directory="$(pwd -P)" rev-parse HEAD 2>/dev/null); then
+  echo "$rev" >/opt/termserv/.source-rev
+else
+  rm -f /opt/termserv/.source-rev
+fi
 
 # Console logs record everything typed on the ports, so only root and adm may read them.
 install -d -m 750 -g adm /var/log/conserver
@@ -113,4 +120,4 @@ else
   echo "    Cockpit:      plugin off (sudo apt install cockpit && sudo termservctl cockpit enable)"
 fi
 echo "    TUI:          sudo termserv-tui"
-echo "    Updates:      automatic (security packages daily, Python libraries weekly; urgent: sudo termserv-update --now)"
+echo "    Updates:      automatic (security packages daily, Python libraries weekly); new termserv code: sudo termservctl update --full"

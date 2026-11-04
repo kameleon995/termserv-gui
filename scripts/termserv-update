@@ -1,10 +1,13 @@
 #!/bin/sh
 # termserv-update: rebuild termserv's Python environment with current library
 # releases (FastAPI, uvicorn, Jinja2, Textual, ...), test it, and switch to it.
+# With --full, first update termserv itself. Also runs as: termservctl update
 #
 #   termserv-update            what the weekly timer runs: only releases at least
 #                              TERMSERV_UPDATE_DELAY old (default 7 days)
 #   termserv-update --now      urgent CVE fix: no delay (tests and rollback still apply)
+#   termserv-update --full     also git pull the checkout install.sh ran from and,
+#                              if it moved, re-run install.sh (combines with --now)
 #   termserv-update --install  used by install.sh: always switch to the new build
 #
 # Layout: /opt/termserv/venv-<time> are complete environments, /opt/termserv/current
@@ -19,18 +22,48 @@ set -eu
 BASE=${TERMSERV_BASE:-/opt/termserv}
 DELAY=${TERMSERV_UPDATE_DELAY:-P7D}
 WEB=termserv-web.service
+SOURCE_FILE=${TERMSERV_SOURCE_FILE:-/etc/termserv/source}
 mode=update
-case "${1:-}" in
-  "") ;;
-  --now) DELAY="" ;;
-  --install) mode=install ;;
-  -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  *) echo "usage: termserv-update [--now|--install]" >&2; exit 2 ;;
-esac
+pull=no
+for arg in "$@"; do
+  case "$arg" in
+    --now) DELAY="" ;;
+    --full) pull=yes ;;
+    --install) mode=install ;;
+    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "usage: termserv-update [--now] [--full] | --install" >&2; exit 2 ;;
+  esac
+done
 [ "$(id -u)" -eq 0 ] || { echo "termserv-update: run as root" >&2; exit 1; }
 
 log() { echo "termserv-update: $*"; }
 umask 022
+
+# --full, termserv's own code: install.sh records the checkout it ran from in $SOURCE_FILE
+# and the commit it installed in $BASE/.source-rev. Pull as the checkout's owner
+# (fast-forward only, so local edits are never overwritten); if HEAD is now a
+# commit that is not installed, hand over to install.sh, which rebuilds the wheel,
+# tests it, and keeps the current version if anything fails.
+if [ "$mode" = update ] && [ "$pull" = yes ] && [ -f "$SOURCE_FILE" ]; then
+  src=$(cat "$SOURCE_FILE")
+  if [ -d "$src/.git" ] && command -v git >/dev/null; then
+    owner=$(stat -c %U "$src")
+    home=$(getent passwd "$owner" | cut -d: -f6)
+    as_owner() { runuser -u "$owner" -- env HOME="$home" "$@"; }
+    if as_owner git -C "$src" pull --ff-only -q; then
+      rev=$(as_owner git -C "$src" rev-parse HEAD)
+      if [ "$rev" != "$(cat "$BASE/.source-rev" 2>/dev/null || true)" ]; then
+        log "new termserv code: $(as_owner git -C "$src" log -1 --format='%h %s'); running install.sh"
+        exec "$src/install.sh"
+      fi
+      log "termserv code is up to date ($(echo "$rev" | cut -c1-7))"
+    else
+      log "git pull in $src failed; updating the Python libraries only"
+    fi
+  else
+    log "$src is not a git checkout; updating the Python libraries only"
+  fi
+fi
 
 wheel=$(ls "$BASE"/dist/termserv-*.whl 2>/dev/null | sort -V | tail -n 1)
 [ -n "$wheel" ] || { log "no termserv wheel in $BASE/dist; re-run install.sh"; exit 1; }
