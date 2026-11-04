@@ -14,6 +14,11 @@ ExecStartPre=-/usr/local/bin/termservctl regen-conserver
 ExecStart=/usr/sbin/conserver -M 127.0.0.1 -C /etc/termserv/conserver.cf -P /etc/termserv/conserver.passwd -o -O 1
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
+# Console logs hold everything typed on the ports (device passwords too): not world-readable.
+UMask=0027
+# Pid file /run/conserver/conserver.pid lets the distro's logrotate job tell this
+# conserver to reopen its logs (SIGUSR2) after rotating them.
+RuntimeDirectory=conserver
 RestartSec=2
 
 [Install]

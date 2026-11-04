@@ -52,7 +52,11 @@ def conserver_cf(cfg: Config, released: set[int] | frozenset[int] = frozenset())
         out.append("console termserv-idle {\n    type exec;\n    exec /bin/true;\n    options ondemand;\n}\n")
     # Only local clients (the SSH attach helper, the UI) may talk to conserver,
     # and they are trusted because sshd already authenticated the user.
-    out.append("access * {\n    trusted 127.0.0.1;\n}\n")
+    # "limited *" takes away the escape commands that would let an SSH user out of
+    # their port: Ctrl-E c | (run a command on this server, i.e. a shell),
+    # Ctrl-E c ; (switch to another console, bypassing per-port groups) and
+    # Ctrl-E c z (suspend the client).
+    out.append("access * {\n    trusted 127.0.0.1;\n    limited *;\n}\n")
     return "\n".join(out)
 
 

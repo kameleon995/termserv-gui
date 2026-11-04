@@ -194,6 +194,10 @@ def test_ondemand_roundtrip(tmp_path):
 
 def test_set_released(tmp_path, monkeypatch):
     monkeypatch.setattr(model, "RELEASE_DIR", tmp_path / "released")
+    # no sshd -t here: it needs the real host keys, which only root can read, and the
+    # auto-updater runs this suite as an unprivileged user
+    real_which = applymod.shutil.which
+    monkeypatch.setattr(applymod.shutil, "which", lambda n: None if n == "sshd" else real_which(n))
     paths = applymod.Paths(conserver_cf=tmp_path / "conserver.cf")
     cfg = make_cfg()
     applymod.set_released(cfg, 1, True, paths=paths, reload=False)
@@ -284,3 +288,11 @@ def test_primary_ip_never_returns_hostname():
     ip = primary_ip()
     assert ip != socket.gethostname()
     assert ip == "<address>" or any(c.isdigit() for c in ip)
+
+
+def test_conserver_limits_escape_commands():
+    # "limited *" stops Ctrl-E c | (run a command on the server, i.e. a shell),
+    # Ctrl-E c ; (hop to another port) and Ctrl-E c z for every user
+    cf = render.conserver_cf(make_cfg())
+    access = cf[cf.index("access * {"):]
+    assert "limited *;" in access and "trusted 127.0.0.1;" in access

@@ -1,0 +1,19 @@
+// Installed by termserv. Install security updates automatically every day.
+// Ubuntu's 50unattended-upgrades decides which archives count (by default the
+// -security pocket, plus Ubuntu Pro ESM when the machine is attached to Pro).
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+
+// Never touch the Jetson's NVIDIA board support packages (kernel, bootloader,
+// firmware) unattended: update those with JetPack / apt by hand. They come from
+// NVIDIA's repository, which unattended-upgrades does not use by default anyway.
+Unattended-Upgrade::Package-Blacklist {
+    "nvidia-l4t-";
+};
+
+// termserv's own daemons are restarted after upgrades by restart-outdated
+// (99termserv-restart). A reboot is only needed for kernel or libc updates;
+// to let the machine reboot itself at night, uncomment:
+// Unattended-Upgrade::Automatic-Reboot "true";
+// Unattended-Upgrade::Automatic-Reboot-Time "04:00";

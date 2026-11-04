@@ -1,0 +1,3 @@
+// Installed by termserv: after packages are installed or upgraded (also by
+// unattended-upgrades), restart termserv daemons still running replaced code.
+DPkg::Post-Invoke { "if [ -x /usr/local/lib/termserv/restart-outdated ]; then /usr/local/lib/termserv/restart-outdated; fi"; };
