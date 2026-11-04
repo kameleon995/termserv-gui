@@ -12,6 +12,8 @@ const $ = (id) => document.getElementById(id);
 let state = null;
 let logPort = null;
 let logTimer = null;
+let me = "user";  // the Cockpit login name, for the ssh link
+cockpit.user().then((u) => { if (u && u.name) { me = u.name; if (state) render(); } });
 
 /* --- theme: follow Cockpit's light/dark setting ----------------------------- */
 function applyTheme() {
@@ -76,6 +78,27 @@ function button(text, onClick, cls) {
     return b;
 }
 
+// ssh:// opens the user's own SSH client; nothing runs in the browser.
+function connectLink(p, address) {
+    const cmd = `ssh -p ${p.ssh_port} ${me}@${address}`;
+    const a = el("a", "Connect", "link");
+    a.href = `ssh://${encodeURIComponent(me)}@${address}:${p.ssh_port}`;
+    a.title = "Open in your SSH client: " + cmd;
+    const copy = button("Copy ssh", () => {
+        const done = (ok) => {
+            if (!ok) { window.prompt("Copy this command:", cmd); return; }
+            copy.textContent = "Copied";
+            setTimeout(() => { copy.textContent = "Copy ssh"; }, 1500);
+        };
+        if (navigator.clipboard && window.isSecureContext)
+            navigator.clipboard.writeText(cmd).then(() => done(true), () => done(false));
+        else
+            done(false);
+    });
+    copy.title = "Copy: " + cmd;
+    return [a, copy];
+}
+
 function render() {
     const s = state;
     $("howto").textContent = `Connect with ssh <user>@${s.address} -p ${s.settings.base_port}+N`;
@@ -97,6 +120,8 @@ function render() {
         const acts = el("span");
         acts.appendChild(button("Edit", () => openForm(p)));
         acts.appendChild(button("Log", () => openLog(p.number)));
+        if (p.enabled && p.state !== "released")
+            for (const n of connectLink(p, s.address)) acts.appendChild(n);
         if (p.enabled) {
             if (p.state === "released")
                 acts.appendChild(button("Grab", () => run(["grab", String(p.number)], `Port ${p.number} is back under termserv.`)));

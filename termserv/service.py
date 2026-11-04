@@ -209,6 +209,76 @@ def grab(store: Store, number: int) -> list[str]:
     return applymod.set_released(store.load(), number, False, paths=store.paths)
 
 
+# --- connecting to a port from this machine --------------------------------
+
+def find_port(cfg: model.Config, which: str | int) -> model.Port:
+    """A port by number or by name. Raises model.ConfigError if there is none."""
+    text = str(which).strip()
+    port = cfg.port(int(text)) if text.isdigit() else next((p for p in cfg.ports if p.name == text), None)
+    if port is None:
+        raise model.ConfigError(f"no port {text!r}")
+    return port
+
+
+def connect_user() -> str:
+    """Who to log in to the serial sshd as: the user behind sudo, else the current user.
+
+    The serial sshd refuses root (PermitRootLogin no), so root without sudo has to
+    say who to connect as.
+    """
+    if os.geteuid() == 0:
+        user = os.environ.get("SUDO_USER", "")
+        if user and user != "root":
+            return user
+        raise model.ConfigError("the serial ports do not accept root; run this with sudo from "
+                                "your own account, or name a user (termservctl connect N --user NAME)")
+    return pwd.getpwuid(os.geteuid()).pw_name
+
+
+def connect_command(cfg: model.Config, which: str | int, user: str) -> list[str]:
+    """The ssh command that opens a port on this machine, after the same checks sshd makes.
+
+    It goes through the termserv sshd like any remote user, so the per-port groups,
+    ForceCommand serial-attach and conserver's "limited *" all still apply; this only
+    saves typing the port number and the address.
+    """
+    port = find_port(cfg, which)
+    if not port.enabled:
+        raise model.ConfigError(f"port {port.number} is disabled")
+    if port.number in model.released_ports():
+        raise model.ConfigError(f"port {port.number} is released for local use; grab it back first")
+    try:
+        pwd.getpwnam(user)
+    except KeyError:
+        raise model.ConfigError(f"no such user {user!r}") from None
+    allowed = port.groups or [cfg.settings.ssh_group]
+    if not any(user in group_members(g) for g in allowed):
+        raise model.ConfigError(f"{user} may not use port {port.number}: not in "
+                                f"{' or '.join(allowed)} (add them under Users)")
+    if not shutil.which("ssh"):
+        raise model.ConfigError("ssh is not installed (apt install openssh-client)")
+    return ["ssh", "-t", "-p", str(cfg.ssh_port(port)), "-l", user, "localhost"]
+
+
+def connect(cfg: model.Config, which: str | int, user: str | None = None) -> int:
+    """Open a port in this terminal and wait until the session ends. Returns ssh's exit code.
+
+    When running as root (sudo), ssh runs as the target user, so it uses that user's
+    keys, agent and known_hosts and sshd sees an ordinary login.
+    """
+    user = user or connect_user()
+    cmd = connect_command(cfg, which, user)
+    kwargs: dict = {}
+    if os.geteuid() == 0:
+        pw = pwd.getpwnam(user)
+        env = {k: os.environ[k] for k in ("TERM", "LANG", "LC_ALL", "SSH_AUTH_SOCK") if k in os.environ}
+        env.update(HOME=pw.pw_dir, USER=pw.pw_name, LOGNAME=pw.pw_name,
+                   PATH="/usr/local/bin:/usr/bin:/bin")
+        kwargs = dict(user=pw.pw_uid, group=pw.pw_gid,
+                      extra_groups=os.getgrouplist(pw.pw_name, pw.pw_gid), env=env)
+    return subprocess.run(cmd, **kwargs).returncode
+
+
 # --- management front ends and web login settings ---------------------------
 
 SETTING_FIELDS = ("web_enabled", "cockpit_enabled", "web_idle_minutes", "web_lockout_minutes", "web_max_failures")

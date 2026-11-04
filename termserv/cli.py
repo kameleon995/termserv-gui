@@ -123,6 +123,16 @@ def cmd_usb(args) -> int:
     return 0
 
 
+def cmd_connect(args) -> int:
+    """Open a serial console from this machine: ssh to the termserv sshd on localhost."""
+    cfg = _load(args)
+    port = service.find_port(cfg, args.port)
+    user = args.user or service.connect_user()
+    print(f"connecting to port {port.number} as {user} (ssh -p {cfg.ssh_port(port)} {user}@localhost); "
+          "Ctrl-E c . disconnects", file=sys.stderr)
+    return service.connect(cfg, port.number, user)
+
+
 # termservctl update is another name for termserv-update (installed by install.sh).
 UPDATE_SCRIPT = "/usr/local/lib/termserv/termserv-update"
 
@@ -271,6 +281,12 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("grab", help="take a released port back")
     s.add_argument("number", type=int)
     s.set_defaults(func=cmd_grab)
+
+    s = sub.add_parser("connect", aliases=["open"],
+                       help="open a serial console here (ssh to this machine's port 2000+N)")
+    s.add_argument("port", help="port number or name")
+    s.add_argument("--user", "-u", help="log in as this user (default: you, or the user behind sudo)")
+    s.set_defaults(func=cmd_connect)
 
     sub.add_parser("regen-conserver", help=argparse.SUPPRESS).set_defaults(func=cmd_regen_conserver)
 

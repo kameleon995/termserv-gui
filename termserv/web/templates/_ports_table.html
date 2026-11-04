@@ -24,6 +24,11 @@
       <td class="actions">
         <a href="/ports/{{ v.number }}/edit">Edit</a>
         <a href="/ports/{{ v.number }}/log">Log</a>
+        {% if v.state not in ('disabled', 'released') %}
+        {% set ssh_cmd = 'ssh -p ' ~ v.ssh_port ~ ' ' ~ user ~ '@' ~ address %}
+        <a href="ssh://{{ user | urlencode }}@{{ address }}:{{ v.ssh_port }}" title="Open in your SSH client: {{ ssh_cmd }}">Connect</a>
+        <button type="button" class="link" data-copy="{{ ssh_cmd }}" title="Copy: {{ ssh_cmd }}">Copy ssh</button>
+        {% endif %}
         {% if v.state == 'released' %}
         <form method="post" action="/ports/{{ v.number }}/grab"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Grab</button></form>
         {% elif v.state != 'disabled' %}

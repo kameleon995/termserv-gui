@@ -9,7 +9,7 @@ import os
 import sys
 
 from textual import on, work
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, SuspendNotSupported
 from textual.binding import Binding
 from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen, Screen
@@ -326,6 +326,7 @@ class TermservTUI(App):
         Binding("e,enter", "edit", "Edit"),
         Binding("d", "delete", "Delete"),
         Binding("r", "release", "Release/grab"),
+        Binding("c", "connect", "Connect"),
         Binding("l", "log", "Log"),
         Binding("u", "users", "Users"),
         Binding("s", "settings", "Settings"),
@@ -451,6 +452,35 @@ class TermservTUI(App):
         else:
             self.call_from_thread(self.notify, "Applied: " + "; ".join(log), timeout=6)
         self.call_from_thread(self.action_refresh)
+
+    def action_connect(self) -> None:
+        """Open the selected port's console in this terminal; the TUI comes back when
+        the session ends (Ctrl-E c .)."""
+        v = self.selected()
+        if not v:
+            return
+        try:
+            cfg = self.store.load()
+            user = service.connect_user()
+            service.connect_command(cfg, v.number, user)  # same checks, before leaving the screen
+        except model.ConfigError as e:
+            self.notify(str(e), severity="error", timeout=8)
+            return
+        try:
+            with self.suspend():
+                print(f"[termserv] port {v.number} as {user}; Ctrl-E c . disconnects and returns to the TUI",
+                      flush=True)
+                code = service.connect(cfg, v.number, user)
+        except SuspendNotSupported:
+            self.notify("This terminal cannot hand over to ssh; run: termservctl connect "
+                        f"{v.number}", severity="error", timeout=8)
+            return
+        except model.ConfigError as e:
+            self.notify(str(e), severity="error", timeout=8)
+            return
+        if code not in (0, None):
+            self.notify(f"ssh ended with exit code {code}", severity="warning")
+        self.action_refresh()
 
     def action_log(self) -> None:
         v = self.selected()

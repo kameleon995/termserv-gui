@@ -313,3 +313,67 @@ def test_cli_update_missing_script(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(cli, "UPDATE_SCRIPT", str(tmp_path / "nope"))
     assert cli.main(["update"]) == 1
     assert "re-run install.sh" in capsys.readouterr().err
+
+
+# --- connect ------------------------------------------------------------------
+
+@pytest.fixture
+def connect_env(tmp_path, monkeypatch):
+    from termserv import service
+
+    monkeypatch.setattr(model, "RELEASE_DIR", tmp_path / "released")
+    monkeypatch.setattr(service, "group_members", lambda g: {"serial": {"alice", "bob"}, "lab": {"bob"}}.get(g, set()))
+    monkeypatch.setattr(service.pwd, "getpwnam", lambda u: u if u in ("alice", "bob") else (_ for _ in ()).throw(KeyError(u)))
+    monkeypatch.setattr(service.shutil, "which", lambda name: "/usr/bin/" + name)
+    return service
+
+
+def test_connect_command_goes_through_the_serial_sshd(connect_env):
+    service = connect_env
+    cfg = make_cfg()
+    assert service.connect_command(cfg, 1, "alice") == ["ssh", "-t", "-p", "2001", "-l", "alice", "localhost"]
+    assert service.connect_command(cfg, "router1", "alice")[3] == "2001"  # by name
+    assert service.connect_command(cfg, "2", "bob")[3] == "2002"
+
+
+@pytest.mark.parametrize("which,user,msg", [
+    (2, "alice", "not in lab"),  # per-port groups are respected
+    (3, "alice", "disabled"),
+    (9, "alice", "no port"),
+    ("nosuch", "alice", "no port"),
+    (1, "mallory", "no such user"),
+])
+def test_connect_command_refuses(connect_env, which, user, msg):
+    with pytest.raises(model.ConfigError, match=msg):
+        connect_env.connect_command(make_cfg(), which, user)
+
+
+def test_connect_command_refuses_released_port(connect_env):
+    model.set_released(1, True)
+    with pytest.raises(model.ConfigError, match="released"):
+        connect_env.connect_command(make_cfg(), 1, "alice")
+
+
+def test_connect_user_is_the_user_behind_sudo(monkeypatch):
+    from termserv import service
+
+    monkeypatch.setattr(service.os, "geteuid", lambda: 0)
+    monkeypatch.setenv("SUDO_USER", "alice")
+    assert service.connect_user() == "alice"
+    monkeypatch.delenv("SUDO_USER")
+    with pytest.raises(model.ConfigError, match="do not accept root"):
+        service.connect_user()
+
+
+def test_cli_connect(connect_env, tmp_path, monkeypatch):
+    service = connect_env
+    f = tmp_path / "ports.yaml"
+    model.save(make_cfg(), f)
+    calls = []
+    monkeypatch.setattr(service.subprocess, "run",
+                        lambda cmd, **kw: calls.append(cmd) or type("R", (), {"returncode": 0})())
+    monkeypatch.setattr(service.os, "geteuid", lambda: 1000)
+    assert cli.main(["-f", str(f), "connect", "router1", "--user", "alice"]) == 0
+    assert calls == [["ssh", "-t", "-p", "2001", "-l", "alice", "localhost"]]
+    assert cli.main(["-f", str(f), "open", "2", "--user", "alice"]) == 2  # not in lab
+    assert len(calls) == 1
