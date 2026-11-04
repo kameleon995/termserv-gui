@@ -39,12 +39,36 @@ done
 log() { echo "termserv-update: $*"; }
 umask 022
 
+# Progress, emerge style: ">>> (2 of 6) Installing ...". Under install.sh the
+# steps are indented, as part of install.sh's own step.
+web_active=no
+if [ "$mode" = update ] && command -v systemctl >/dev/null && systemctl is-active -q "$WEB" 2>/dev/null; then
+  web_active=yes
+fi
+total=5
+[ "$mode" = update ] && [ "$pull" = yes ] && total=$((total + 1))
+[ "$web_active" = yes ] && total=$((total + 1))
+step_n=0
+indent=""
+[ "$mode" = install ] && indent="    "
+started=$(date +%s)
+step() { step_n=$((step_n + 1)); echo "$indent>>> ($step_n of $total) $*"; }
+done_msg() {
+  t=$(( $(date +%s) - started ))
+  echo "$indent>>> $* ($((t / 60))m$((t % 60))s)"
+}
+
 # --full, termserv's own code: install.sh records the checkout it ran from in $SOURCE_FILE
 # and the commit it installed in $BASE/.source-rev. Pull as the checkout's owner
 # (fast-forward only, so local edits are never overwritten); if HEAD is now a
 # commit that is not installed, hand over to install.sh, which rebuilds the wheel,
 # tests it, and keeps the current version if anything fails.
-if [ "$mode" = update ] && [ "$pull" = yes ] && [ -f "$SOURCE_FILE" ]; then
+if [ "$mode" = update ] && [ "$pull" = yes ]; then
+  step "Pulling new termserv code"
+fi
+if [ "$mode" = update ] && [ "$pull" = yes ] && [ ! -f "$SOURCE_FILE" ]; then
+  log "$SOURCE_FILE is missing; run install.sh once from the checkout. Updating the Python libraries only"
+elif [ "$mode" = update ] && [ "$pull" = yes ]; then
   src=$(cat "$SOURCE_FILE")
   if [ -d "$src/.git" ] && command -v git >/dev/null; then
     owner=$(stat -c %U "$src")
@@ -53,7 +77,7 @@ if [ "$mode" = update ] && [ "$pull" = yes ] && [ -f "$SOURCE_FILE" ]; then
     if as_owner git -C "$src" pull --ff-only -q; then
       rev=$(as_owner git -C "$src" rev-parse HEAD)
       if [ "$rev" != "$(cat "$BASE/.source-rev" 2>/dev/null || true)" ]; then
-        log "new termserv code: $(as_owner git -C "$src" log -1 --format='%h %s'); running install.sh"
+        log "new termserv code: $(as_owner git -C "$src" log -1 --format='%h %s'); continuing with install.sh"
         exec "$src/install.sh"
       fi
       log "termserv code is up to date ($(echo "$rev" | cut -c1-7))"
@@ -68,6 +92,7 @@ fi
 wheel=$(ls "$BASE"/dist/termserv-*.whl 2>/dev/null | sort -V | tail -n 1)
 [ -n "$wheel" ] || { log "no termserv wheel in $BASE/dist; re-run install.sh"; exit 1; }
 
+step "Creating a new Python environment"
 new="$BASE/venv-$(date +%Y%m%d-%H%M%S)"
 trap 'rm -rf "$new"' EXIT  # cancelled once the new environment is live
 python3 -m venv "$new"
@@ -82,7 +107,7 @@ if [ -n "$DELAY" ]; then
   delay_arg="--uploaded-prior-to=$DELAY"
   pip install --upgrade "$delay_arg" pip
 fi
-log "building $new from $(basename "$wheel")${DELAY:+ (releases older than $DELAY)}"
+step "Installing $(basename "$wheel") and its libraries${DELAY:+ (releases older than $DELAY)}"
 # shellcheck disable=SC2086
 pip install $delay_arg "$wheel[test]"
 sha256sum "$wheel" | cut -d' ' -f1 >"$new/.termserv-wheel"
@@ -93,12 +118,12 @@ cur=""
 if [ "$mode" = update ] && [ -n "$cur" ] &&
    cmp -s "$cur/.termserv-freeze" "$new/.termserv-freeze" &&
    cmp -s "$cur/.termserv-wheel" "$new/.termserv-wheel"; then
-  log "already up to date"
+  done_msg "Already up to date; nothing changed"
   exit 0
 fi
 [ -n "$cur" ] && diff "$cur/.termserv-freeze" "$new/.termserv-freeze" | sed -n 's/^> /    new: /p' || true
 
-log "testing the new environment"
+step "Running the test suite in the new environment"
 if [ -d "$BASE/tests" ]; then
   if ! (cd / && setpriv --reuid=nobody --regid=nogroup --clear-groups \
           env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/nonexistent TMPDIR=/tmp \
@@ -125,10 +150,12 @@ web_ok() {
   return 0
 }
 
+step "Switching to the new environment"
 switch_to "$new"
 trap - EXIT
 log "now using $new"
-if [ "$mode" = update ] && command -v systemctl >/dev/null && systemctl is-active -q "$WEB"; then
+if [ "$web_active" = yes ]; then
+  step "Restarting the web UI"
   systemctl restart "$WEB" || true
   if ! web_ok; then
     if [ -n "$cur" ]; then
@@ -142,8 +169,10 @@ if [ "$mode" = update ] && command -v systemctl >/dev/null && systemctl is-activ
   log "web UI restarted"
 fi
 
+step "Removing old environments"
 # keep the live environment and the one before it
 for d in "$BASE"/venv-*; do
   [ -d "$d" ] || continue
   [ "$d" = "$new" ] || [ "$d" = "$cur" ] || rm -rf "$d"
 done
+done_msg "Update finished"
