@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -120,6 +121,20 @@ def cmd_usb(args) -> int:
     for d in devs:
         print(f"{d.node:<14} {d.id_path:<48} {d.vendor} {d.model} {d.serial}".rstrip())
     return 0
+
+
+# termservctl update is another name for termserv-update (installed by install.sh).
+UPDATE_SCRIPT = "/usr/local/lib/termserv/termserv-update"
+
+
+def cmd_update(args) -> int:
+    argv = [UPDATE_SCRIPT] + (["--now"] if args.now else [])
+    try:
+        os.execv(UPDATE_SCRIPT, argv)  # replaces this process; does not return
+    except OSError as e:
+        print(f"error: cannot run {UPDATE_SCRIPT}: {e.strerror} (re-run install.sh)", file=sys.stderr)
+        return 1
+    return 0  # only reached when execv is stubbed out in tests
 
 
 # --- front ends and settings -------------------------------------------------
@@ -260,6 +275,11 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("regen-conserver", help=argparse.SUPPRESS).set_defaults(func=cmd_regen_conserver)
 
     sub.add_parser("usb", help="list USB serial adapters and their USB paths").set_defaults(func=cmd_usb)
+
+    s = sub.add_parser("update", help="update termserv's Python libraries now (runs termserv-update)")
+    s.add_argument("--now", action="store_true",
+                   help="urgent CVE fix: take releases from the last 7 days too")
+    s.set_defaults(func=cmd_update)
 
     for name, what in (("web", "the built-in web UI"), ("cockpit", "the Cockpit plugin")):
         s = sub.add_parser(name, help=f"turn {what} on or off")
