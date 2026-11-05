@@ -43,6 +43,20 @@ group. The certificate is self-signed, so the browser asks you to accept it once
 on Ubuntu, and the distro's own `conserver-server` service (termserv runs its own,
 bound to localhost).
 
+### Uninstall
+
+```sh
+sudo ./install.sh --uninstall              # asks before deleting config, console logs, the serial group
+sudo ./install.sh --uninstall --keep-data  # keep /etc/termserv, /var/log/conserver and the serial group
+sudo ./install.sh --purge                  # delete everything without asking
+```
+
+This stops and removes the termserv services and timer, the Cockpit plugin, the udev
+rules, the PAM and apt configuration, `/opt/termserv` and the commands in `/usr/local`,
+and unmasks the distro's `conserver-server`. With no terminal to ask on it keeps the
+data. Distro packages stay installed, and `brltty` / `ModemManager` stay disabled
+(`sudo systemctl enable --now ModemManager brltty` to bring them back).
+
 ## Security updates
 
 Updates install themselves; nothing in this repository needs to change for a CVE fix.
