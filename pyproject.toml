@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest", "pexpect", "httpx"]
+test = ["pytest", "pexpect", "httpx", "httpx2"]
 
 [project.scripts]
 termservctl = "termserv.cli:main"
