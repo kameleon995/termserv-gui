@@ -1,3 +1,6 @@
+/* The hidden attribute must win over display rules such as .banner { display: flex }. */
+[hidden] { display: none !important; }
+
 :root {
   --bg: #ffffff; --fg: #151515; --muted: #6a6e73; --border: #d2d2d2; --row: #f5f5f5;
   --primary: #0066cc; --primary-fg: #ffffff; --danger: #c9190b; --warn-bg: #fdf7e7; --warn-border: #f0ab00;

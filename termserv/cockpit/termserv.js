@@ -138,7 +138,7 @@ function render() {
     }
     $("empty").hidden = s.ports.length > 0;
     $("pending").hidden = s.pending.length === 0;
-    $("pending-text").textContent = `Saved changes are not live yet (${s.pending.join(", ")}).`;
+    $("pending-text").textContent = s.pending.length ? `Saved changes are not live yet (${s.pending.join(", ")}).` : "";
     $("services").textContent = "Services: " + Object.entries(s.services).map(([k, v]) => `${k.replace(".service", "")} ${v}`).join(" · ");
 }
 

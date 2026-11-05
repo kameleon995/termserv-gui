@@ -183,3 +183,14 @@ def _paths_like(store):
             setattr(self, k, getattr(target, k))
 
     return init
+
+
+def test_cockpit_hidden_banners_stay_hidden():
+    # .banner sets display: flex, which beats the browser's [hidden] rule unless the
+    # stylesheet restores it; otherwise "Saved changes are not live yet ()" shows on load.
+    from pathlib import Path
+
+    import termserv
+
+    css = (Path(termserv.__file__).parent / "cockpit" / "termserv.css").read_text()
+    assert "[hidden] { display: none !important; }" in css
