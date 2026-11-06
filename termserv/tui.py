@@ -462,7 +462,7 @@ class TermservTUI(App):
             if yes:
                 self._restart()
 
-        self.push_screen(Confirm(f"Restart the termserv services? {service.RESTART_WARNING}"), go)
+        self.push_screen(Confirm(service.restart_question(service.pending_changes(self.store))), go)
 
     @work(thread=True, exclusive=True)
     def _restart(self) -> None:

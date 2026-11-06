@@ -277,7 +277,7 @@ $("apply").addEventListener("click", () => {
     run(["apply"]).then(() => { $("apply").disabled = false; });
 });
 $("restart").addEventListener("click", () => confirmThen(
-    "Restart the termserv services? " + (state ? state.restart_warning : ""),
+    state ? state.restart_question : "Restart the termserv services?",
     () => {
         $("restart").disabled = true;
         run(["restart"]).then(() => { $("restart").disabled = false; });

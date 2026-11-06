@@ -119,7 +119,7 @@ Logs are in `/var/log/conserver/portN.log`.
   the service restarts. Pages set a strict Content-Security-Policy (no inline
   scripts), deny framing and are never cached.
 - **Restart services** (under the service list on the Ports page) restarts
-  conserver, the SSH daemon and the web UI. Everyone on a serial port is
+  conserver, the SSH daemon and the web UI, applying any unapplied changes first. Everyone on a serial port is
   disconnected and web users have to log in again. The TUI (`R`), the Cockpit
   plugin and `sudo termservctl restart` do the same.
 - Service: `termserv-web`, port `settings.web_port` (default 8443), certificate in
@@ -213,7 +213,7 @@ termservctl update [--now] [--full]   run termserv-update now; --full also pulls
 termservctl render sshd|conserver|udev
 termservctl check               validate + syntax-check generated config
 termservctl apply [--no-reload]
-termservctl restart             restart conserver, sshd and the web UI (drops open sessions)
+termservctl restart             apply unapplied changes, then restart conserver, sshd and the web UI (drops open sessions)
 termservctl web enable|disable|status       built-in web UI on/off
 termservctl cockpit enable|disable|status   Cockpit plugin on/off
 termservctl settings [--web-idle-minutes N] [--web-max-failures N] [--web-lockout-minutes N]
