@@ -234,7 +234,7 @@ def create_app(
         cfg = store.load()
         port = model.Port(number=service.next_free_number(cfg))
         return render(request, "port_form.html", cfg=cfg, port=port, is_new=True,
-                      sockets=service.socket_choices(cfg), bauds=model.BAUDS, parities=model.PARITIES)
+                      sockets=service.socket_choices(cfg), bauds=model.BAUDS, parities=model.PARITIES, flows=model.FLOWS)
 
     @app.get("/ports/{number}/edit", response_class=HTMLResponse)
     async def edit_port(request: Request, number: int):
@@ -244,7 +244,7 @@ def create_app(
         if port is None:
             raise HTTPException(404, "no such port")
         return render(request, "port_form.html", cfg=cfg, port=port, is_new=False,
-                      sockets=service.socket_choices(cfg, number, port.usb_path), bauds=model.BAUDS, parities=model.PARITIES)
+                      sockets=service.socket_choices(cfg, number, port.usb_path), bauds=model.BAUDS, parities=model.PARITIES, flows=model.FLOWS)
 
     @app.post("/ports")
     async def create_port(request: Request):
@@ -272,7 +272,7 @@ def create_app(
         except model.ConfigError:
             port = cfg.port(original) if original else model.Port(number=service.next_free_number(cfg))
         return render(request, "port_form.html", cfg=cfg, port=port, is_new=is_new, original=original,
-                      sockets=service.socket_choices(cfg, original, port.usb_path), bauds=model.BAUDS, parities=model.PARITIES)
+                      sockets=service.socket_choices(cfg, original, port.usb_path), bauds=model.BAUDS, parities=model.PARITIES, flows=model.FLOWS)
 
     @app.post("/ports/{number}/delete")
     async def remove_port(request: Request, number: int):

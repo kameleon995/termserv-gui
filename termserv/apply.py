@@ -81,6 +81,7 @@ def apply(cfg: Config, paths: Paths = Paths(), reload: bool = True) -> list[str]
         if reload:
             _run(["udevadm", "control", "--reload"], check=False)
             _run(["udevadm", "trigger", "--subsystem-match=tty"], check=False)
+            _run(["udevadm", "trigger", "--subsystem-match=usb-serial"], check=False)
             log.append("reloaded udev rules")
 
     if not reload:

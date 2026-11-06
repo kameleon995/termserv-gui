@@ -32,6 +32,10 @@
     <select name="parity">{% for p in parities %}<option {{ 'selected' if p == port.parity }}>{{ p }}</option>{% endfor %}</select>
     <small>8 data bits, 1 stop bit</small>
   </label>
+  <label>Flow control
+    <select name="flow">{% for f in flows %}<option {{ 'selected' if f == port.flow }}>{{ f }}</option>{% endfor %}</select>
+    <small>Leave at none unless the device is set up for flow control</small>
+  </label>
   <label class="wide">Allowed groups
     <input name="groups" value="{{ port.groups | join(', ') }}" placeholder="{{ cfg.settings.ssh_group }}">
     <small>Linux groups that may use this port. Empty means everyone in <code>{{ cfg.settings.ssh_group }}</code>.</small>

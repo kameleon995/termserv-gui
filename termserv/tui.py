@@ -129,6 +129,8 @@ class PortForm(ArrowNavigation, ModalScreen[bool]):
                 yield Select([(str(b), b) for b in model.BAUDS], id="baud", value=p.baud, allow_blank=False, compact=True)
                 yield Label("Parity")
                 yield Select([(x, x) for x in model.PARITIES], id="parity", value=p.parity, allow_blank=False, compact=True)
+                yield Label("Flow control")
+                yield Select([(x, x) for x in model.FLOWS], id="flow", value=p.flow, allow_blank=False, compact=True)
                 yield Label("Allowed groups")
                 yield Input(", ".join(p.groups), id="groups", placeholder="empty = everyone in the serial group", compact=True)
             yield Checkbox("Enabled", p.enabled, id="enabled", compact=True)
@@ -155,6 +157,7 @@ class PortForm(ArrowNavigation, ModalScreen[bool]):
             "device": self.query_one("#device", Input).value,
             "baud": self.query_one("#baud", Select).value,
             "parity": self.query_one("#parity", Select).value,
+            "flow": self.query_one("#flow", Select).value,
             "groups": self.query_one("#groups", Input).value,
             "enabled": self.query_one("#enabled", Checkbox).value,
             "ondemand": self.query_one("#ondemand", Checkbox).value,
@@ -371,7 +374,7 @@ class TermservTUI(App):
             device = (f"{v.socket}" + (f" → {v.tty}" if v.tty else "")) if v.socket else p.device_path()
             if not v.device_present and v.state != "disabled":
                 device += "  [red]empty socket[/]" if v.socket else "  [red]missing[/]"
-            line = f"{p.baud} 8{p.parity[0].upper()}1" + ("  on demand" if p.ondemand else "")
+            line = f"{p.baud} 8{p.parity[0].upper()}1" + (f" {p.flow}" if p.flow != "none" else "") + ("  on demand" if p.ondemand else "")
             state = f"[{STATE_STYLE.get(v.state, '')}]{v.state}[/]"
             table.add_row(str(p.number), str(v.ssh_port), p.name or "-", device, line,
                           ", ".join(p.groups) or cfg.settings.ssh_group, state, ", ".join(v.users) or "-",

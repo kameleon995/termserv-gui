@@ -153,6 +153,7 @@ def parse_port(data: dict) -> model.Port:
         device=str(data.get("device", "") or "").strip(),
         baud=as_int("baud", 115200),
         parity=str(data.get("parity", "none") or "none"),
+        flow=str(data.get("flow", "none") or "none"),
         enabled=as_bool("enabled"),
         groups=list(groups),
         usb_path=str(data.get("usb_path", "") or "").strip(),
