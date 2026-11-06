@@ -59,3 +59,5 @@ label.inline { display: flex; align-items: center; margin: 6px 0; }
   td.acts { text-align: left; }
   td.acts::before { content: ""; }
 }
+.services { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.services .small { margin-top: 0; }

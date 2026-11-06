@@ -194,3 +194,74 @@ def test_cockpit_hidden_banners_stay_hidden():
 
     css = (Path(termserv.__file__).parent / "cockpit" / "termserv.css").read_text()
     assert "[hidden] { display: none !important; }" in css
+
+
+# --- restarting the services --------------------------------------------------
+
+class _Result:
+    def __init__(self, code=0, err=""):
+        self.stdout, self.stderr, self.returncode = "", err, code
+
+
+def _fake_systemctl(monkeypatch, fail=()):
+    calls = []
+
+    def fake(*args):
+        calls.append(args)
+        return _Result(1, "boom") if args[-1] in fail else _Result()
+
+    monkeypatch.setattr(frontends, "_systemd", lambda: True)
+    monkeypatch.setattr(frontends, "_systemctl", fake)
+    return calls
+
+
+def test_restart_services_order_and_web_without_blocking(store, monkeypatch):
+    calls = _fake_systemctl(monkeypatch)
+    log = service.restart_services(store)
+    assert calls == [("restart", applymod.CONSERVER_SERVICE), ("restart", applymod.SSHD_SERVICE),
+                     ("--no-block", "restart", frontends.WEB_SERVICE)]
+    assert log[-1] == f"restarting {frontends.WEB_SERVICE}"
+
+
+def test_restart_services_skips_web_when_off_or_asked(store, monkeypatch):
+    calls = _fake_systemctl(monkeypatch)
+    service.restart_services(store, web=False)
+    assert all(frontends.WEB_SERVICE not in c for c in calls)
+    cfg = store.load()
+    cfg.settings.web_enabled = False
+    store.save(cfg)
+    calls.clear()
+    service.restart_services(store)
+    assert all(frontends.WEB_SERVICE not in c for c in calls)
+
+
+def test_restart_services_leaves_sshd_stopped_without_ports(store, monkeypatch):
+    cfg = store.load()
+    for p in cfg.ports:
+        p.enabled = False
+    store.save(cfg)
+    calls = _fake_systemctl(monkeypatch)
+    log = service.restart_services(store, web=False)
+    assert calls == [("restart", applymod.CONSERVER_SERVICE)]
+    assert any("left stopped" in line for line in log)
+
+
+def test_restart_services_reports_failures(store, monkeypatch):
+    calls = _fake_systemctl(monkeypatch, fail={applymod.CONSERVER_SERVICE})
+    with pytest.raises(applymod.ApplyError, match="conserver.service failed to restart \\(boom\\)"):
+        service.restart_services(store, web=False)
+    assert ("restart", applymod.SSHD_SERVICE) in calls  # the others are still tried
+
+
+def test_restart_services_needs_systemd(store):
+    with pytest.raises(applymod.ApplyError, match="systemd"):
+        service.restart_services(store)
+
+
+def test_cli_restart(store, monkeypatch, capsys):
+    monkeypatch.setattr(applymod.Paths, "__init__", _paths_like(store))
+    _fake_systemctl(monkeypatch)
+    assert ctl(store, "restart") == 0
+    assert f"restarted {applymod.CONSERVER_SERVICE}" in capsys.readouterr().out
+    monkeypatch.setattr(frontends, "_systemd", lambda: False)
+    assert ctl(store, "restart") == 2

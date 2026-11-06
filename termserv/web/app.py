@@ -20,6 +20,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.background import BackgroundTask
 
 from .. import __version__, model, service
 from ..apply import ApplyError
@@ -96,6 +97,7 @@ def create_app(
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     templates.env.globals["version"] = __version__
+    templates.env.globals["restart_warning"] = service.RESTART_WARNING
 
     @app.middleware("http")
     async def session_middleware(request: Request, call_next):
@@ -303,6 +305,23 @@ def create_app(
         run_action(request, lambda: service.apply_changes(store), "Changes applied.")
         return back("/")
 
+    @app.post("/restart")
+    async def restart_services(request: Request):
+        current_user(request)
+        await check_csrf(request)
+        log: list[str] = []
+        # This process is the web UI: restart the other services first, answer,
+        # and only then restart ourselves (sessions live in memory, so everyone
+        # has to log in again afterwards).
+        if not run_action(request, lambda: log.extend(service.restart_services(store, web=False))):
+            return back("/")
+        if not store.load().settings.web_enabled:
+            flash(request, "Services restarted: " + "; ".join(log))
+            return back("/")
+        response = render(request, "restarting.html", user=None, log=log)
+        response.background = BackgroundTask(_restart_web_soon)
+        return response
+
     # --- logs --------------------------------------------------------------
 
     @app.get("/ports/{number}/log", response_class=HTMLResponse)
@@ -339,6 +358,11 @@ def create_app(
         return back("/users")
 
     return app
+
+
+async def _restart_web_soon() -> None:
+    await asyncio.sleep(1)  # let the browser receive the page first
+    await asyncio.to_thread(service.restart_web)
 
 
 def _address(request: Request) -> str:

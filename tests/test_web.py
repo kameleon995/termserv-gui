@@ -307,3 +307,48 @@ def test_login_limits_follow_ports_yaml_without_restart(env, monkeypatch):
     r = client.post("/login", data={"username": "boss", "password": "secret", "csrf": token(client, "/login")})
     assert "Too many failed logins. Try again in 3 minute(s)." in r.text  # locked after 2, not 5
     assert client.app.state.sessions.idle_seconds == 7 * 60
+
+
+def test_restart_services(env, monkeypatch):
+    from termserv.web import app as appmod
+
+    store, c = env
+    login(c)
+    calls = []
+    monkeypatch.setattr(service, "restart_services", lambda s, web=True: calls.append(web) or ["restarted x"])
+    monkeypatch.setattr(service, "restart_web", lambda: calls.append("web"))
+    monkeypatch.setattr(appmod.asyncio, "sleep", lambda s: asyncio_noop())
+    assert "Restart services" in c.get("/").text
+    r = c.post("/restart", data={"csrf": token(c)})
+    assert "Restarting services" in r.text and "restarted x" in r.text
+    assert 'url=/login' in r.text
+    assert calls == [False, "web"]  # others first, the web UI itself after answering
+
+
+def test_restart_services_without_web_restart_or_on_error(env, monkeypatch):
+    store, c = env
+    login(c)
+    cfg = store.load()
+    cfg.settings.web_enabled = False
+    store.save(cfg)
+    monkeypatch.setattr(service, "restart_services", lambda s, web=True: ["restarted x"])
+    r = c.post("/restart", data={"csrf": token(c)})
+    assert r.url.path == "/" and "Services restarted: restarted x" in r.text
+
+    def broken(s, web=True):
+        raise applymod.ApplyError("conserver.service failed to restart")
+
+    monkeypatch.setattr(service, "restart_services", broken)
+    r = c.post("/restart", data={"csrf": token(c)})
+    assert "failed to restart" in r.text
+
+
+def test_restart_needs_csrf(env, monkeypatch):
+    _, c = env
+    login(c)
+    monkeypatch.setattr(service, "restart_services", lambda s, web=True: pytest.fail("restarted"))
+    assert c.post("/restart", data={"csrf": "nope"}).status_code == 403
+
+
+async def asyncio_noop():
+    return None

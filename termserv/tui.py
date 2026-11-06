@@ -334,6 +334,7 @@ class TermservTUI(App):
         Binding("u", "users", "Users"),
         Binding("s", "settings", "Settings"),
         Binding("p", "apply", "Apply"),
+        Binding("R", "restart", "Restart services"),
         Binding("f5", "refresh", "Refresh", show=False),
         Binding("q", "quit", "Quit"),
     ]
@@ -454,6 +455,24 @@ class TermservTUI(App):
             self.call_from_thread(self.notify, str(e), severity="error", timeout=10)
         else:
             self.call_from_thread(self.notify, "Applied: " + "; ".join(log), timeout=6)
+        self.call_from_thread(self.action_refresh)
+
+    def action_restart(self) -> None:
+        def go(yes: bool | None) -> None:
+            if yes:
+                self._restart()
+
+        self.push_screen(Confirm(f"Restart the termserv services? {service.RESTART_WARNING}"), go)
+
+    @work(thread=True, exclusive=True)
+    def _restart(self) -> None:
+        self.call_from_thread(self.notify, "Restarting services...")
+        try:
+            log = service.restart_services(self.store)
+        except (model.ConfigError, ApplyError) as e:
+            self.call_from_thread(self.notify, str(e), severity="error", timeout=10)
+        else:
+            self.call_from_thread(self.notify, "Services restarted: " + "; ".join(log), timeout=6)
         self.call_from_thread(self.action_refresh)
 
     def action_connect(self) -> None:

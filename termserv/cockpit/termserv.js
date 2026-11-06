@@ -276,6 +276,12 @@ $("apply").addEventListener("click", () => {
     $("apply").disabled = true;
     run(["apply"]).then(() => { $("apply").disabled = false; });
 });
+$("restart").addEventListener("click", () => confirmThen(
+    "Restart the termserv services? " + (state ? state.restart_warning : ""),
+    () => {
+        $("restart").disabled = true;
+        run(["restart"]).then(() => { $("restart").disabled = false; });
+    }));
 $("port-form").addEventListener("submit", saveForm);
 $("form-cancel").addEventListener("click", () => $("form-dialog").close());
 $("log-back").addEventListener("click", closeLog);
