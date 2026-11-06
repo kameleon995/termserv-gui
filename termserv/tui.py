@@ -228,7 +228,7 @@ class SettingsForm(ArrowNavigation, ModalScreen[list]):
 
 
 class LogScreen(Screen):
-    BINDINGS = [Binding("escape,q", "app.pop_screen", "Back")]
+    BINDINGS = [Binding("escape,q", "app.pop_screen", "Back"), Binding("x", "clear", "Clear log")]
 
     def __init__(self, store: service.Store, number: int) -> None:
         super().__init__()
@@ -255,6 +255,21 @@ class LogScreen(Screen):
             log.clear()
             log.write(text)
             self.last = text
+
+    def action_clear(self) -> None:
+        def go(yes: bool | None) -> None:
+            if not yes:
+                return
+            try:
+                service.clear_log(self.store.load(), self.number)
+            except model.ConfigError as e:
+                self.notify(str(e), severity="error")
+                return
+            self.notify(f"Port {self.number}'s log cleared")
+            self.refresh_log()
+
+        self.app.push_screen(Confirm(f"Clear port {self.number}'s log? Everything recorded so far, "
+                                     "including rotated copies, is deleted for good."), go)
 
 
 class UsersScreen(Screen):

@@ -1,3 +1,4 @@
+import os
 import shutil
 
 import pytest
@@ -276,6 +277,22 @@ def test_log_roundtrip_and_cli_flag(tmp_path):
     assert cli.main(["-f", f, "set", "1", "--log"]) == 0
     assert model.load(f).port(1).log is True
     assert "log" not in yaml.safe_load(open(f).read())["ports"][0]  # default omitted
+
+
+def test_cli_clear_log(tmp_path, monkeypatch):
+    f = str(tmp_path / "ports.yaml")
+    assert cli.main(["-f", f, "set", "1"]) == 0
+    cfg = model.load(f)
+    cfg.settings.log_dir = str(tmp_path)
+    model.save(cfg, f)
+    log = tmp_path / "port1.log"
+    log.write_text("x\n")
+    monkeypatch.setattr("sys.stdin", open(os.devnull))
+    assert cli.main(["-f", f, "clear-log", "1"]) == 2  # not a tty and no --yes
+    assert log.read_text() == "x\n"
+    assert cli.main(["-f", f, "clear-log", "1", "--yes"]) == 0
+    assert log.read_text() == ""
+    assert cli.main(["-f", f, "clear-log", "9", "--yes"]) == 2  # no such port
 
 
 def test_parse_port_log_defaults_on():

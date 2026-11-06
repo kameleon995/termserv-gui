@@ -242,6 +242,21 @@ def cmd_log(args) -> int:
     return 0
 
 
+def cmd_clear_log(args) -> int:
+    cfg = _load(args)
+    if not args.yes:
+        if not sys.stdin.isatty():
+            print("refusing to clear without --yes", file=sys.stderr)
+            return 2
+        answer = input(f"Clear port {args.number}'s console log, including rotated copies? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            print("not cleared")
+            return 1
+    service.clear_log(cfg, args.number)
+    print(f"cleared port {args.number}'s log")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="termservctl", description="Manage serial-over-SSH ports")
     ap.add_argument("-f", "--file", type=Path, default=model.DEFAULT_PORTS_FILE, help="ports.yaml path")
@@ -343,6 +358,11 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("log", help="print the end of a port's console log")
     s.add_argument("number", type=int)
     s.set_defaults(func=cmd_log)
+
+    s = sub.add_parser("clear-log", help="empty a port's console log and delete its rotated copies")
+    s.add_argument("number", type=int)
+    s.add_argument("-y", "--yes", action="store_true", help="do not ask for confirmation")
+    s.set_defaults(func=cmd_clear_log)
 
     args = ap.parse_args(argv)
     try:

@@ -333,6 +333,13 @@ def create_app(
             raise HTTPException(404, "no such port")
         return render(request, "log.html", cfg=cfg, port=port, log=service.log_tail(cfg, number))
 
+    @app.post("/ports/{number}/log/clear")
+    async def clear_port_log(request: Request, number: int):
+        current_user(request)
+        await check_csrf(request)
+        run_action(request, lambda: service.clear_log(store.load(), number), f"Port {number}'s log cleared.")
+        return back(f"/ports/{number}/log")
+
     @app.get("/partials/ports/{number}/log", response_class=HTMLResponse)
     async def port_log_partial(request: Request, number: int):
         current_user(request)

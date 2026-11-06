@@ -288,6 +288,11 @@ $("restart").addEventListener("click", () => confirmThen(
 $("port-form").addEventListener("submit", saveForm);
 $("form-cancel").addEventListener("click", () => $("form-dialog").close());
 $("log-back").addEventListener("click", closeLog);
+$("log-clear").addEventListener("click", () => confirmThen(
+    `Clear port ${logPort}'s log? Everything recorded so far, including rotated copies, is deleted for good.`,
+    () => ctl(["clear-log", String(logPort), "--yes"], { write: true })
+        .then(() => { $("log").textContent = ""; loadLog(); })
+        .catch((err) => { $("log").textContent = errorText(err); })));
 
 // re-check when admin access is switched on/off
 const superuser = cockpit.dbus(null, { bus: "internal" }).proxy("cockpit.Superuser", "/superuser");

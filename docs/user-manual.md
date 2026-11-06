@@ -116,7 +116,8 @@ port while you were away.
 
 An administrator can turn logging off for a single port. Nothing done on such a
 port is recorded, so there is also nothing to look up later. In the web UI, TUI and
-Cockpit those ports show **no log** next to their line settings.
+Cockpit those ports show **no log** next to their line settings. Administrators can
+also clear a port's log, so don't rely on an old log still being there.
 
 ## Common problems
 

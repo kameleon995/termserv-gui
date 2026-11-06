@@ -153,6 +153,26 @@ def test_log_page_strips_control_codes(env, tmp_path):
     assert "&lt;script&gt;" in html  # escaped
 
 
+def test_clear_log(env, tmp_path):
+    store, c = env
+    cfg = store.load()
+    cfg.settings.log_dir = str(tmp_path)
+    store.save(cfg)
+    (tmp_path / "port1.log").write_text("secret stuff\n")
+    (tmp_path / "port1.log.1").write_text("older\n")
+    (tmp_path / "port1.log.2.gz").write_bytes(b"\x1f\x8b")
+    (tmp_path / "port11.log.1").write_text("another port\n")
+    login(c)
+    assert "Clear log" in c.get("/ports/1/log").text
+    r = c.post("/ports/1/log/clear", data={"csrf": "forged"})
+    assert r.status_code == 403 and (tmp_path / "port1.log").read_text()
+    r = c.post("/ports/1/log/clear", data={"csrf": token(c, "/ports/1/log")})
+    assert r.url.path == "/ports/1/log" and "log cleared" in r.text
+    assert (tmp_path / "port1.log").read_text() == ""  # truncated, not removed
+    assert not (tmp_path / "port1.log.1").exists() and not (tmp_path / "port1.log.2.gz").exists()
+    assert (tmp_path / "port11.log.1").exists()
+
+
 def test_users_page_and_toggle(env, monkeypatch):
     store, c = env
     calls = []

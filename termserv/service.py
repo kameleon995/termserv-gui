@@ -329,6 +329,29 @@ def save_settings(store: Store, data: dict) -> list[str]:
 
 # --- logs and services -----------------------------------------------------
 
+def clear_log(cfg: model.Config, number: int) -> int:
+    """Empty a port's console log and delete its rotated copies. Returns bytes removed.
+
+    The live file is truncated, not deleted: conserver keeps it open in append
+    mode and would otherwise go on writing to a file nobody can see.
+    """
+    number = int(number)
+    if cfg.port(number) is None:
+        raise model.ConfigError(f"port {number} does not exist")
+    log_dir = Path(cfg.settings.log_dir)
+    path = log_dir / f"port{number}.log"
+    removed = 0
+    if path.exists():
+        removed += path.stat().st_size
+        os.truncate(path, 0)
+    # logrotate's copies: port1.log.1, port1.log.2.gz, ...
+    for old in log_dir.glob(f"port{number}.log.*"):
+        if old.is_file() and re.fullmatch(rf"port{number}\.log\.\d+(\.gz)?", old.name):
+            removed += old.stat().st_size
+            old.unlink()
+    return removed
+
+
 def log_tail(cfg: model.Config, number: int, max_bytes: int = 64_000) -> str:
     """Last part of a port's conserver log, with terminal control codes removed."""
     path = Path(cfg.settings.log_dir) / f"port{int(number)}.log"
