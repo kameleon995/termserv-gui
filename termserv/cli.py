@@ -46,7 +46,7 @@ def cmd_set(args) -> int:
     if p is None:
         p = model.Port(number=args.number)
         cfg.ports.append(p)
-    for field in ("name", "device", "baud", "parity", "usb_path"):
+    for field in ("name", "device", "baud", "parity", "flow", "usb_path"):
         v = getattr(args, field)
         if v is not None:
             setattr(p, field, v)
@@ -212,6 +212,7 @@ def cmd_state(args) -> int:
         "next_free": service.next_free_number(cfg),
         "bauds": list(model.BAUDS),
         "parities": list(model.PARITIES),
+        "flows": list(model.FLOWS),
     }
     if args.sockets_for is not None:
         port = cfg.port(args.sockets_for) if args.sockets_for else None
@@ -248,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--device")
     s.add_argument("--baud", type=int)
     s.add_argument("--parity", choices=model.PARITIES)
+    s.add_argument("--flow", choices=model.FLOWS, help="flow control (default none)")
     s.add_argument("--usb-path", dest="usb_path")
     s.add_argument("--groups", help="comma-separated Linux groups allowed on this port")
     g = s.add_mutually_exclusive_group()

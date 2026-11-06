@@ -113,7 +113,7 @@ function render() {
         if (!p.device_present && p.state !== "disabled")
             adapter.appendChild(el("span", p.socket ? "empty socket" : "missing", "badge"));
         cell(tr, "Adapter", adapter);
-        cell(tr, "Line", `${p.baud} 8${p.parity[0].toUpperCase()}1` + (p.ondemand ? " · on demand" : ""));
+        cell(tr, "Line", `${p.baud} 8${p.parity[0].toUpperCase()}1` + (p.flow && p.flow !== "none" ? ` ${p.flow}` : "") + (p.ondemand ? " · on demand" : ""));
         cell(tr, "Access", (p.groups || []).join(", ") || s.settings.ssh_group);
         cell(tr, "State", el("span", p.state, "state-" + p.state));
         cell(tr, "Connected", (p.users || []).join(", ") || "–");
@@ -187,7 +187,7 @@ function fillSelect(sel, items, value) {
 function openForm(port) {
     const isNew = !port;
     editing = isNew ? null : port.number;
-    const p = port || { number: state.next_free, name: "", device: "", baud: 115200, parity: "none",
+    const p = port || { number: state.next_free, name: "", device: "", baud: 115200, parity: "none", flow: "none",
                         groups: [], usb_path: "", enabled: true, ondemand: false };
     $("form-title").textContent = isNew ? "Add port" : `Edit port ${p.number}`;
     $("form-error").textContent = "";
@@ -200,6 +200,7 @@ function openForm(port) {
     $("f-ondemand").checked = !!p.ondemand;
     fillSelect($("f-baud"), state.bauds.map((b) => [String(b), b]), p.baud);
     fillSelect($("f-parity"), state.parities.map((x) => [x, x]), p.parity);
+    fillSelect($("f-flow"), (state.flows || ["none"]).map((x) => [x, x]), p.flow || "none");
     fillSelect($("f-usb"), [["none (use device path)", ""]], "");
     $("form-dialog").showModal();
     // socket list: what is plugged in now, with sockets used by other ports disabled
@@ -221,6 +222,7 @@ function saveForm(ev) {
         device: $("f-device").value,
         baud: $("f-baud").value,
         parity: $("f-parity").value,
+        flow: $("f-flow").value,
         groups: $("f-groups").value,
         enabled: $("f-enabled").checked,
         ondemand: $("f-ondemand").checked,

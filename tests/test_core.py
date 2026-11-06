@@ -96,6 +96,7 @@ def test_udev_rules():
     text = render.udev_rules(make_cfg())
     assert 'ENV{ID_PATH}=="platform-3610000.usb-usb-0:1.2:1.0", SYMLINK+="port1"' in text
     assert "port2" not in text  # no usb_path
+    assert 'DRIVER=="ftdi_sio", ATTR{latency_timer}="1"' in text
 
 
 @pytest.mark.skipif(not (shutil.which("sshd") and shutil.which("conserver")), reason="needs sshd and conserver")
@@ -157,8 +158,34 @@ def test_conserver_cf_ondemand():
     cfg.port(2).ondemand = True
     text = render.conserver_cf(cfg)
     port2 = text[text.index("console port2"):]
-    assert "options ondemand;" in port2.split("}")[0]
-    assert "options ondemand;" not in text[text.index("console port1"):].split("}")[0]
+    assert "options !ixon,!ixoff,!crtscts,ondemand;" in port2.split("}")[0]
+    assert "ondemand" not in text[text.index("console port1"):].split("}")[0]
+
+
+def test_conserver_cf_flow_control_explicit():
+    # conserver defaults to XON/XOFF on serial consoles; termserv must say "off"
+    # unless the port asks for it, or consoles without flow control stall.
+    cfg = make_cfg()
+    cfg.port(2).flow = "rtscts"
+    text = render.conserver_cf(cfg)
+    port1 = text[text.index("console port1"):].split("}")[0]
+    port2 = text[text.index("console port2"):].split("}")[0]
+    assert "options !ixon,!ixoff,!crtscts;" in port1
+    assert "options !ixon,!ixoff,crtscts;" in port2
+    cfg.port(2).flow = "xonxoff"
+    assert "options ixon,ixoff,!crtscts;" in render.conserver_cf(cfg)
+
+
+def test_flow_validated_and_kept_tidy(tmp_path):
+    cfg = make_cfg()
+    cfg.port(1).flow = "bogus"
+    with pytest.raises(model.ConfigError, match="flow must be one of"):
+        cfg.validate()
+    cfg.port(1).flow = "none"
+    cfg.port(2).flow = "xonxoff"
+    d = cfg.to_dict()
+    assert "flow" not in d["ports"][0] and d["ports"][1]["flow"] == "xonxoff"
+    assert model.Config.from_dict(d).port(2).flow == "xonxoff"
 
 
 def test_conserver_cf_released_port_left_out():

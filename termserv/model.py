@@ -16,6 +16,9 @@ DEFAULT_PORTS_FILE = Path("/etc/termserv/ports.yaml")
 RELEASE_DIR = Path(os.environ.get("TERMSERV_RELEASE_DIR", "/run/termserv/released"))
 
 PARITIES = ("none", "even", "odd")
+# Flow control. "none" is the default: most network gear consoles (Cisco, Dell,
+# Juniper) use none, and conserver would otherwise turn XON/XOFF on by itself.
+FLOWS = ("none", "xonxoff", "rtscts")
 BAUDS = (1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600)
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$")
 GROUP_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -34,6 +37,7 @@ class Port:
     device: str = ""
     baud: int = 115200
     parity: str = "none"
+    flow: str = "none"
     enabled: bool = True
     # Extra Linux groups allowed on this port. Empty = settings.ssh_group.
     groups: list[str] = field(default_factory=list)
@@ -136,6 +140,8 @@ class Config:
                 errors.append(f"{where}: baud {p.baud} not one of {', '.join(map(str, BAUDS))}")
             if p.parity not in PARITIES:
                 errors.append(f"{where}: parity must be one of {', '.join(PARITIES)}")
+            if p.flow not in FLOWS:
+                errors.append(f"{where}: flow must be one of {', '.join(FLOWS)}")
             if p.device and not p.device.startswith("/dev/"):
                 errors.append(f"{where}: device must be under /dev/")
             if p.device and re.search(r"[\s;{}\"']", p.device):
@@ -173,6 +179,8 @@ class Config:
                 d.pop("groups")
             if not d["ondemand"]:
                 d.pop("ondemand")
+            if d["flow"] == "none":
+                d.pop("flow")
             ports.append(d)
         return {"settings": asdict(self.settings), "ports": ports}
 

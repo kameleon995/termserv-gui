@@ -190,6 +190,7 @@ See [examples/ports.yaml](examples/ports.yaml). SSH port = `base_port + number`.
 | `usb_path` | udev `ID_PATH` of the USB socket; generates a `/dev/portN` symlink, so a port is a physical socket |
 | `device` | explicit device path for ports not on a USB socket (ignored when `usb_path` is set) |
 | `baud`, `parity` | line settings (8 data bits, 1 stop bit) |
+| `flow` | flow control: `none` (default), `xonxoff` or `rtscts`. Leave at `none` unless the device is configured for flow control |
 | `groups` | Linux groups allowed on this port (default: `settings.ssh_group`) |
 | `enabled` | `false` closes the SSH port and drops the console |
 | `ondemand` | `true` opens the device only while someone is connected, so it is free otherwise; nothing is logged while nobody is attached |
