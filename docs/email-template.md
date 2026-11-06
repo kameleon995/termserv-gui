@@ -67,6 +67,7 @@ Przed rozłączeniem wyloguj się z urządzenia (`exit`, `logout`, `end`), żeby
 osoba nie trafiła do Twojej uprzywilejowanej sesji.
 
 Wszystko, co dzieje się na konsolach, jest logowane, łącznie z tym, co wpisujesz
-(także hasła do urządzeń).
+(także hasła do urządzeń). Wyjątkiem są porty, na których administrator wyłączył
+logowanie (w tabeli portów mają oznaczenie **no log**): z nich nic nie jest zapisywane.
 
 ---

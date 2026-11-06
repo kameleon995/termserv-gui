@@ -46,6 +46,9 @@ class Port:
     # Open the device only while someone is connected (frees it otherwise, but
     # nothing is logged while nobody is attached).
     ondemand: bool = False
+    # Record the console's output to settings.log_dir/portN.log. Off means
+    # nothing is written to disk and the log viewers and console replay are empty.
+    log: bool = True
 
     @property
     def console(self) -> str:
@@ -181,6 +184,8 @@ class Config:
                 d.pop("ondemand")
             if d["flow"] == "none":
                 d.pop("flow")
+            if d["log"]:
+                d.pop("log")
             ports.append(d)
         return {"settings": asdict(self.settings), "ports": ports}
 

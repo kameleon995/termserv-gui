@@ -125,6 +125,11 @@ def test_log_and_users_screens(store, monkeypatch, tmp_path):
             await pilot.press("l")
             await pilot.pause()
             assert isinstance(app.screen, LogScreen)
+            await pilot.press("x")
+            await pilot.pause()
+            await pilot.click("#yes")
+            await pilot.pause()
+            assert (tmp_path / "port1.log").read_text() == ""
             await pilot.press("escape", "u")
             await pilot.pause()
             assert isinstance(app.screen, UsersScreen)

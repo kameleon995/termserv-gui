@@ -93,7 +93,19 @@ def test_add_edit_delete_port(env):
     c.post("/ports/3", data={"csrf": tok, "number": "4", "name": "fw1", "baud": "9600", "parity": "even",
                              "enabled": "1", "ondemand": "1"})
     cfg = store.load()
-    assert cfg.port(3) is None and cfg.port(4).ondemand
+    assert cfg.port(3) is None and cfg.port(4).ondemand and cfg.port(4).log
+
+    # the form sends a hidden log=0 before the checkbox; unchecked turns logging off
+    form = c.get("/ports/4/edit").text
+    assert '<input type="hidden" name="log" value="0">' in form
+    c.post("/ports/4", data={"csrf": tok, "number": "4", "name": "fw1", "baud": "9600", "parity": "even",
+                             "enabled": "1", "log": "0"})
+    assert store.load().port(4).log is False
+    assert "no log" in c.get("/").text
+    assert "Logging is off" in c.get("/ports/4/log").text
+    c.post("/ports/4", data={"csrf": tok, "number": "4", "name": "fw1", "baud": "9600", "parity": "even",
+                             "enabled": "1", "log": ["0", "1"]})
+    assert store.load().port(4).log is True
 
     c.post("/ports/4/delete", data={"csrf": tok})
     assert store.load().port(4) is None
@@ -139,6 +151,26 @@ def test_log_page_strips_control_codes(env, tmp_path):
     html = c.get("/ports/1/log").text
     assert "boot ok" in html and "\x1b" not in html
     assert "&lt;script&gt;" in html  # escaped
+
+
+def test_clear_log(env, tmp_path):
+    store, c = env
+    cfg = store.load()
+    cfg.settings.log_dir = str(tmp_path)
+    store.save(cfg)
+    (tmp_path / "port1.log").write_text("secret stuff\n")
+    (tmp_path / "port1.log.1").write_text("older\n")
+    (tmp_path / "port1.log.2.gz").write_bytes(b"\x1f\x8b")
+    (tmp_path / "port11.log.1").write_text("another port\n")
+    login(c)
+    assert "Clear log" in c.get("/ports/1/log").text
+    r = c.post("/ports/1/log/clear", data={"csrf": "forged"})
+    assert r.status_code == 403 and (tmp_path / "port1.log").read_text()
+    r = c.post("/ports/1/log/clear", data={"csrf": token(c, "/ports/1/log")})
+    assert r.url.path == "/ports/1/log" and "log cleared" in r.text
+    assert (tmp_path / "port1.log").read_text() == ""  # truncated, not removed
+    assert not (tmp_path / "port1.log.1").exists() and not (tmp_path / "port1.log.2.gz").exists()
+    assert (tmp_path / "port11.log.1").exists()
 
 
 def test_users_page_and_toggle(env, monkeypatch):

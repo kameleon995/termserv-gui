@@ -1,10 +1,11 @@
+import os
 import shutil
 
 import pytest
 import yaml
 
 from termserv import apply as applymod
-from termserv import cli, model, render
+from termserv import cli, model, render, service
 
 
 def make_cfg():
@@ -107,6 +108,7 @@ def test_generated_config_passes_daemon_syntax_checks(tmp_path):
     key = tmp_path / "hostkey"
     subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)], check=True)
     cfg = make_cfg()
+    cfg.port(2).log = False  # logfile "" must be accepted
     sc = tmp_path / "sshd_config"
     sc.write_text(render.sshd_config(cfg, host_keys=[str(key)]))
     subprocess.run(["/usr/sbin/sshd", "-t", "-f", str(sc)], check=True)
@@ -253,6 +255,51 @@ def test_cli_ondemand_flag(tmp_path):
     assert model.load(f).port(1).ondemand is True
     assert cli.main(["-f", f, "set", "1", "--no-ondemand"]) == 0
     assert model.load(f).port(1).ondemand is False
+
+
+def test_conserver_cf_logging_off_per_port():
+    cfg = make_cfg()
+    cfg.port(2).log = False
+    text = render.conserver_cf(cfg)
+    port1 = text[text.index("console port1"):].split("}")[0]
+    port2 = text[text.index("console port2"):].split("}")[0]
+    assert "logfile" not in port1  # inherits the default block's logfile
+    assert 'logfile "";' in port2
+
+
+def test_log_roundtrip_and_cli_flag(tmp_path):
+    f = str(tmp_path / "ports.yaml")
+    assert cli.main(["-f", f, "set", "1", "--no-log"]) == 0
+    assert model.load(f).port(1).log is False
+    assert yaml.safe_load(open(f).read())["ports"][0]["log"] is False
+    assert cli.main(["-f", f, "set", "1", "--name", "x"]) == 0  # untouched when flag absent
+    assert model.load(f).port(1).log is False
+    assert cli.main(["-f", f, "set", "1", "--log"]) == 0
+    assert model.load(f).port(1).log is True
+    assert "log" not in yaml.safe_load(open(f).read())["ports"][0]  # default omitted
+
+
+def test_cli_clear_log(tmp_path, monkeypatch):
+    f = str(tmp_path / "ports.yaml")
+    assert cli.main(["-f", f, "set", "1"]) == 0
+    cfg = model.load(f)
+    cfg.settings.log_dir = str(tmp_path)
+    model.save(cfg, f)
+    log = tmp_path / "port1.log"
+    log.write_text("x\n")
+    monkeypatch.setattr("sys.stdin", open(os.devnull))
+    assert cli.main(["-f", f, "clear-log", "1"]) == 2  # not a tty and no --yes
+    assert log.read_text() == "x\n"
+    assert cli.main(["-f", f, "clear-log", "1", "--yes"]) == 0
+    assert log.read_text() == ""
+    assert cli.main(["-f", f, "clear-log", "9", "--yes"]) == 2  # no such port
+
+
+def test_parse_port_log_defaults_on():
+    assert service.parse_port({"number": "1"}).log is True  # clients that don't know the field
+    assert service.parse_port({"number": "1", "log": "0"}).log is False
+    assert service.parse_port({"number": "1", "log": False}).log is False
+    assert service.parse_port({"number": "1", "log": True}).log is True
 
 
 def test_usb_socket_wins_over_device():
