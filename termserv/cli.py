@@ -214,7 +214,7 @@ def cmd_state(args) -> int:
         "ports": ports,
         "pending": service.pending_changes(store),
         "services": service.services_status(),
-        "restart_warning": service.RESTART_WARNING,
+        "restart_question": service.restart_question(service.pending_changes(store)),
         "next_free": service.next_free_number(cfg),
         "bauds": list(model.BAUDS),
         "parities": list(model.PARITIES),
@@ -282,8 +282,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--no-reload", action="store_true", help="write files only")
     s.set_defaults(func=cmd_apply)
 
-    sub.add_parser("restart", help="restart termserv's services (conserver, sshd, web UI); "
-                   "drops open console sessions and web logins").set_defaults(func=cmd_restart)
+    sub.add_parser("restart", help="apply unapplied changes, then restart termserv's services "
+                   "(conserver, sshd, web UI); drops open console sessions and web logins").set_defaults(func=cmd_restart)
 
     s = sub.add_parser("release", help="free one port for local use (e.g. screen) until grab or reboot")
     s.add_argument("number", type=int)

@@ -212,7 +212,32 @@ def _fake_systemctl(monkeypatch, fail=()):
 
     monkeypatch.setattr(frontends, "_systemd", lambda: True)
     monkeypatch.setattr(frontends, "_systemctl", fake)
+    monkeypatch.setattr(service, "pending_changes", lambda store: [])
     return calls
+
+
+def test_restart_services_applies_pending_changes_first(store, monkeypatch):
+    calls = _fake_systemctl(monkeypatch)
+    monkeypatch.setattr(service, "pending_changes", lambda store: ["sshd_config"])
+    monkeypatch.setattr(applymod, "apply", lambda cfg, paths: calls.append("apply") or ["applied"])
+    log = service.restart_services(store, web=False)
+    assert calls[0] == "apply" and ("restart", applymod.CONSERVER_SERVICE) in calls[1:]
+    assert log[0] == "applied"
+    assert "applied first" in service.restart_question(["sshd_config"])
+    assert "applied first" not in service.restart_question([])
+
+
+def test_restart_services_does_not_restart_on_a_bad_config(store, monkeypatch):
+    calls = _fake_systemctl(monkeypatch)
+    monkeypatch.setattr(service, "pending_changes", lambda store: ["sshd_config"])
+
+    def broken(cfg, paths):
+        raise applymod.ApplyError("sshd -t failed")
+
+    monkeypatch.setattr(applymod, "apply", broken)
+    with pytest.raises(applymod.ApplyError, match="sshd -t"):
+        service.restart_services(store)
+    assert calls == []
 
 
 def test_restart_services_order_and_web_without_blocking(store, monkeypatch):

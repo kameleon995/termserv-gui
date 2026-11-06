@@ -97,7 +97,7 @@ def create_app(
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     templates.env.globals["version"] = __version__
-    templates.env.globals["restart_warning"] = service.RESTART_WARNING
+    templates.env.globals["restart_question"] = service.restart_question
 
     @app.middleware("http")
     async def session_middleware(request: Request, call_next):

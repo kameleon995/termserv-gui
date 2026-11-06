@@ -356,11 +356,17 @@ def services_status() -> dict[str, str]:
 
 RESTART_WARNING = ("Restarting the services disconnects everyone on a serial port "
                    "and logs out everyone in the web UI.")
+RESTART_APPLIES = "Unapplied changes are applied first."
+
+
+def restart_question(pending: list[str]) -> str:
+    """The confirmation every front end asks before restart_services()."""
+    return " ".join(["Restart the termserv services?", RESTART_WARNING] + ([RESTART_APPLIES] if pending else []))
 
 
 def restart_services(store: Store, web: bool = True) -> list[str]:
-    """Restart termserv's daemons: conserver, then sshd (when a port is enabled),
-    then the web UI (when it is on).
+    """Apply any unapplied changes, then restart termserv's daemons: conserver,
+    then sshd (when a port is enabled), then the web UI (when it is on).
 
     The web UI is restarted without waiting (--no-block), so a request from the
     web UI itself can still answer; pass web=False to leave it out and call
@@ -370,6 +376,11 @@ def restart_services(store: Store, web: bool = True) -> list[str]:
         raise applymod.ApplyError("systemd is not running here; cannot restart services")
     cfg = store.load()
     log: list[str] = []
+    # Apply saved changes first: otherwise conserver would pick up ports.yaml on
+    # its own at start (regen-conserver) while sshd and udev kept the old config.
+    # A config that fails validation stops here, before anything is restarted.
+    if pending_changes(store):
+        log += applymod.apply(cfg, paths=store.paths)
     failed: list[str] = []
     units = [applymod.CONSERVER_SERVICE]
     if render.sshd_config(cfg, banner_path=str(store.paths.banner)):
