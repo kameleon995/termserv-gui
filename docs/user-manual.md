@@ -109,10 +109,14 @@ Several people can be on the same port at once:
 
 ### Logging
 
-Everything on every port is logged on the termserv box, including what you type,
-with timestamps. Assume a password you type at a device's console is recorded.
+Ports are logged on the termserv box by default, including what you type, with
+timestamps. Assume a password you type at a device's console is recorded.
 Administrators can read the logs; ask them if you need to see what happened on a
 port while you were away.
+
+An administrator can turn logging off for a single port. Nothing done on such a
+port is recorded, so there is also nothing to look up later. In the web UI, TUI and
+Cockpit those ports show **no log** next to their line settings.
 
 ## Common problems
 

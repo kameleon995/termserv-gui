@@ -158,6 +158,8 @@ def parse_port(data: dict) -> model.Port:
         groups=list(groups),
         usb_path=str(data.get("usb_path", "") or "").strip(),
         ondemand=as_bool("ondemand"),
+        # on unless asked otherwise, so a client that does not know the field keeps logging
+        log=as_bool("log") if "log" in data else True,
     )
 
 

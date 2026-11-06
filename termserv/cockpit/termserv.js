@@ -113,7 +113,7 @@ function render() {
         if (!p.device_present && p.state !== "disabled")
             adapter.appendChild(el("span", p.socket ? "empty socket" : "missing", "badge"));
         cell(tr, "Adapter", adapter);
-        cell(tr, "Line", `${p.baud} 8${p.parity[0].toUpperCase()}1` + (p.flow && p.flow !== "none" ? ` ${p.flow}` : "") + (p.ondemand ? " · on demand" : ""));
+        cell(tr, "Line", `${p.baud} 8${p.parity[0].toUpperCase()}1` + (p.flow && p.flow !== "none" ? ` ${p.flow}` : "") + (p.ondemand ? " · on demand" : "") + (p.log === false ? " · no log" : ""));
         cell(tr, "Access", (p.groups || []).join(", ") || s.settings.ssh_group);
         cell(tr, "State", el("span", p.state, "state-" + p.state));
         cell(tr, "Connected", (p.users || []).join(", ") || "–");
@@ -188,7 +188,7 @@ function openForm(port) {
     const isNew = !port;
     editing = isNew ? null : port.number;
     const p = port || { number: state.next_free, name: "", device: "", baud: 115200, parity: "none", flow: "none",
-                        groups: [], usb_path: "", enabled: true, ondemand: false };
+                        groups: [], usb_path: "", enabled: true, ondemand: false, log: true };
     $("form-title").textContent = isNew ? "Add port" : `Edit port ${p.number}`;
     $("form-error").textContent = "";
     $("f-number").value = p.number;
@@ -198,6 +198,7 @@ function openForm(port) {
     $("f-groups").value = (p.groups || []).join(", ");
     $("f-enabled").checked = !!p.enabled;
     $("f-ondemand").checked = !!p.ondemand;
+    $("f-log").checked = p.log !== false;
     fillSelect($("f-baud"), state.bauds.map((b) => [String(b), b]), p.baud);
     fillSelect($("f-parity"), state.parities.map((x) => [x, x]), p.parity);
     fillSelect($("f-flow"), (state.flows || ["none"]).map((x) => [x, x]), p.flow || "none");
@@ -226,6 +227,7 @@ function saveForm(ev) {
         groups: $("f-groups").value,
         enabled: $("f-enabled").checked,
         ondemand: $("f-ondemand").checked,
+        log: $("f-log").checked,
     };
     const args = ["save-port"].concat(editing === null ? [] : ["--original", String(editing)]);
     ctl(args, { write: true, input: JSON.stringify(data) })
@@ -244,7 +246,8 @@ function loadLog() {
             const pre = $("log");
             const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
             if (pre.textContent !== out) {
-                pre.textContent = out || "(nothing logged yet)";
+                const port = state && state.ports.find((x) => x.number === logPort);
+                pre.textContent = out || (port && port.log === false ? "(logging is off for this port)" : "(nothing logged yet)");
                 if ($("log-follow").checked && atBottom) pre.scrollTop = pre.scrollHeight;
             }
         })

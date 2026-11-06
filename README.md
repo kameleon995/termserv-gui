@@ -101,7 +101,7 @@ Updates install themselves; nothing in this repository needs to change for a CVE
 | `Ctrl-E c ?` | help |
 
 The first user on a port gets write access; later users watch read-only.
-Logs are in `/var/log/conserver/portN.log`.
+Logs are in `/var/log/conserver/portN.log` (unless logging is turned off for the port).
 
 ## Web UI
 
@@ -201,6 +201,7 @@ See [examples/ports.yaml](examples/ports.yaml). SSH port = `base_port + number`.
 | `groups` | Linux groups allowed on this port (default: `settings.ssh_group`) |
 | `enabled` | `false` closes the SSH port and drops the console |
 | `ondemand` | `true` opens the device only while someone is connected, so it is free otherwise; nothing is logged while nobody is attached |
+| `log` | `false` stops recording the port's console output to `portN.log` (default `true`); `termservctl set N --no-log` / `--log` |
 
 ## termservctl
 

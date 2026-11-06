@@ -122,6 +122,12 @@ Tips:
   instead of `--usb-path`.
 - `--ondemand` opens the device only while someone is connected. The device is free
   the rest of the time, but nothing is logged while nobody is attached.
+- `--no-log` stops recording a port's console output (for a device whose console
+  shows secrets you don't want on disk, say). It is per port and on by default; the
+  form has a **Log console output** checkbox. With it off the log viewers show
+  nothing new and conserver's replay (`Ctrl-E c r`) has nothing to replay. The old
+  `portN.log` is left in place until logrotate removes it; delete it by hand if it
+  must go now. `--log` turns it back on. Apply to make the change live.
 - `--disable` closes the port's SSH port and drops its console without deleting it.
 - The SSH port is always `base_port + number` (2000 + N by default).
 
@@ -247,6 +253,7 @@ sudo less /var/log/conserver/port1.log    # whole log, timestamped hourly and on
 
 Logs record everything typed and printed, including passwords typed at the device, so
 only root and `adm` can read them. The distro's logrotate job rotates them.
+Ports with logging turned off (`--no-log`) are not recorded.
 
 **Use a port locally (cable test, firmware flash)**
 
@@ -415,6 +422,7 @@ ports:
 | `groups` | list of groups | restrict the port to these groups (default: `ssh_group`) |
 | `enabled` | `true` / `false` | `false` closes the SSH port and drops the console |
 | `ondemand` | `true` / `false` | open the device only while someone is connected (no logging otherwise) |
+| `log` | `true` (default) / `false` | `false` records nothing to `log_dir/portN.log` for this port |
 
 Prefer editing through the tools; they validate before saving. If you edit the file by
 hand, run `sudo termservctl check` and then `sudo termservctl apply`.
@@ -426,6 +434,7 @@ termservctl list [--status]                     show ports (and who is connected
 termservctl set N [options]                     add or change a port
     --name NAME --device DEV --usb-path PATH --baud B --parity none|even|odd
     --flow none|xonxoff|rtscts --groups g1,g2 --enable|--disable --ondemand|--no-ondemand
+    --log|--no-log
 termservctl remove N                            delete a port
 termservctl apply [--no-reload]                 validate, write config, reload services
 termservctl check                               validate and syntax-check without changing anything

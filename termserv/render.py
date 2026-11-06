@@ -52,6 +52,9 @@ def conserver_cf(cfg: Config, released: set[int] | frozenset[int] = frozenset())
         ]
         if p.name:
             lines.append(f"    aliases {p.name};")
+        if not p.log:
+            # an empty logfile overrides the default block's, so nothing is written
+            lines.append('    logfile "";')
         options = list(FLOW_OPTIONS[p.flow])
         if p.ondemand:
             options.append("ondemand")

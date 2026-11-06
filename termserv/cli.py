@@ -54,6 +54,8 @@ def cmd_set(args) -> int:
         p.groups = [g for g in args.groups.split(",") if g]
     if args.ondemand is not None:
         p.ondemand = args.ondemand
+    if args.log is not None:
+        p.log = args.log
     if args.enable:
         p.enabled = True
     if args.disable:
@@ -266,6 +268,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="open the device only while someone is connected")
     g.add_argument("--no-ondemand", dest="ondemand", action="store_false",
                    help="keep the device open and logged all the time (default)")
+    g = s.add_mutually_exclusive_group()
+    g.add_argument("--log", dest="log", action="store_true", default=None,
+                   help="record console output to the port's log file (default)")
+    g.add_argument("--no-log", dest="log", action="store_false",
+                   help="do not record console output for this port")
     s.set_defaults(func=cmd_set)
 
     s = sub.add_parser("remove", help="delete a port")

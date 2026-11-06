@@ -42,6 +42,7 @@
   </label>
   <label class="check"><input type="checkbox" name="enabled" value="1" {{ 'checked' if port.enabled }}> Enabled</label>
   <label class="check"><input type="checkbox" name="ondemand" value="1" {{ 'checked' if port.ondemand }}> Open only while someone is connected <small>(frees the device otherwise; nothing is logged while idle)</small></label>
+  <label class="check"><input type="hidden" name="log" value="0"><input type="checkbox" name="log" value="1" {{ 'checked' if port.log }}> Log console output <small>(to <code>{{ cfg.settings.log_dir }}/port{{ port.number }}.log</code>; off means nothing is recorded)</small></label>
   <div class="buttons wide">
     <button class="primary">{{ 'Add port' if is_new else 'Save' }}</button>
     <a class="button" href="/">Cancel</a>

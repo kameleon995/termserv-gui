@@ -93,7 +93,19 @@ def test_add_edit_delete_port(env):
     c.post("/ports/3", data={"csrf": tok, "number": "4", "name": "fw1", "baud": "9600", "parity": "even",
                              "enabled": "1", "ondemand": "1"})
     cfg = store.load()
-    assert cfg.port(3) is None and cfg.port(4).ondemand
+    assert cfg.port(3) is None and cfg.port(4).ondemand and cfg.port(4).log
+
+    # the form sends a hidden log=0 before the checkbox; unchecked turns logging off
+    form = c.get("/ports/4/edit").text
+    assert '<input type="hidden" name="log" value="0">' in form
+    c.post("/ports/4", data={"csrf": tok, "number": "4", "name": "fw1", "baud": "9600", "parity": "even",
+                             "enabled": "1", "log": "0"})
+    assert store.load().port(4).log is False
+    assert "no log" in c.get("/").text
+    assert "Logging is off" in c.get("/ports/4/log").text
+    c.post("/ports/4", data={"csrf": tok, "number": "4", "name": "fw1", "baud": "9600", "parity": "even",
+                             "enabled": "1", "log": ["0", "1"]})
+    assert store.load().port(4).log is True
 
     c.post("/ports/4/delete", data={"csrf": tok})
     assert store.load().port(4) is None
