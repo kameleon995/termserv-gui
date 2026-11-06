@@ -1,58 +1,72 @@
-# Welcome email for console users
+# E-mail powitalny dla administratorów IT
 
-Copy the text below, replace the placeholders and send it to each new user. Send the
-password separately (another channel or a second email) if your policy requires it.
+Szablon wiadomości dla administratorów, którzy korzystają ze wspólnego konta na
+serwerze konsol. Skopiuj tekst poniżej, podmień pola i wyślij. Jeśli polityka
+bezpieczeństwa tego wymaga, hasło wyślij osobnym kanałem.
 
-| Placeholder | Replace with |
+| Pole | Wstaw |
 | --- | --- |
-| `{{USER}}` | the user's Linux account name on the termserv box |
-| `{{IP}}` | the termserv box's IP address or host name |
-| `{{PASSWORD}}` | their initial password |
-| `{{PORT_LIST}}` | which device is on which port (optional; delete the section if not needed) |
-| `{{ADMIN_CONTACT}}` | who to ask for help |
+| `{{USER}}` | nazwa wspólnego konta na serwerze termserv |
+| `{{IP}}` | adres IP lub nazwa hosta serwera termserv |
+| `{{PASSWORD}}` | hasło wspólnego konta |
+| `{{PORT_LIST}}` | który port to które urządzenie (opcjonalnie; usuń sekcję, jeśli niepotrzebna) |
 
 ---
 
-**Subject:** Your serial console access
+**Temat:** Dostęp do serwera konsol szeregowych
 
-Hi,
+Cześć,
 
-You now have access to the serial consoles on our console server. You can reach a
-device's console from any computer with an SSH client (Linux, macOS, and Windows 10/11
-all have one built in).
+mamy serwer konsol szeregowych: konsole routerów, switchy i serwerów są dostępne
+przez SSH z dowolnego komputera (Linux, macOS i Windows 10/11 mają klienta SSH
+wbudowanego, działa też PuTTY).
 
-**Your login**
+**Dane logowania (konto wspólne)**
 
-- Server: `{{IP}}`
-- Username: `{{USER}}`
-- Password: `{{PASSWORD}}` (the console server gives no shell, so to change it, ask {{ADMIN_CONTACT}})
+- Serwer: `{{IP}}`
+- Użytkownik: `{{USER}}`
+- Hasło: `{{PASSWORD}}`
 
-**How to connect**
+To konto wspólne dla całego zespołu, więc nie przekazujcie hasła poza zespół.
+Konto nie daje powłoki na serwerze, tylko dostęp do konsol.
 
-Each console port has its own SSH port: port 1 is 2001, port 2 is 2002, and so on
-(2000 + the port number). Open a terminal and type:
+**Jak się połączyć**
+
+Każdy port konsoli ma własny port SSH: port 1 to 2001, port 2 to 2002 itd.
+(2000 + numer portu). W terminalu:
 
     ssh -p 2001 {{USER}}@{{IP}}
 
-Enter your password, then press Enter once or twice to wake up the console.
+Podaj hasło i naciśnij Enter raz lub dwa razy, żeby konsola się odezwała.
 
-Always include `{{USER}}@` in the command. Without it, the login fails even with the
-right password. In PuTTY, use Connection type SSH, Host `{{IP}}`, Port 2001 (and so on).
+Zawsze wpisuj `{{USER}}@` przed adresem. Bez tego ssh wyśle nazwę Twojego lokalnego
+użytkownika i logowanie się nie uda, nawet z dobrym hasłem. W PuTTY: typ połączenia
+SSH, Host `{{IP}}`, Port 2001 (itd.), nie "Serial": prędkość i parzystość są już
+ustawione po stronie serwera.
 
-**Ports**
+**Porty**
 
 {{PORT_LIST}}
 
-**Useful keys** (press Ctrl-E, then c, then the key)
+**Skróty klawiszowe** (Ctrl-E, potem c, potem klawisz)
 
-- `Ctrl-E c .` disconnect
-- `Ctrl-E c f` take over typing if someone else is connected
-- `Ctrl-E c l 0` send a break
-- `Ctrl-E c ?` help
+- `Ctrl-E c .` rozłączenie
+- `Ctrl-E c f` przejęcie pisania, gdy ktoś inny jest na porcie
+- `Ctrl-E c l 0` wysłanie sygnału break
+- `Ctrl-E c ?` pomoc
 
-If someone else is already on a port, you can watch but not type until you take over
-with `Ctrl-E c f`. Everything on the consoles is logged.
+**Praca na wspólnym porcie**
 
-Questions or problems: {{ADMIN_CONTACT}}
+Na jednym porcie może być kilka osób naraz. Pisać może tylko pierwsza osoba, która
+się połączyła; pozostali widzą to samo na żywo w trybie tylko do odczytu, dopóki nie
+przejmą pisania przez `Ctrl-E c f`. Ponieważ wszyscy logujemy się tym samym kontem,
+serwer nie pokaże, kto konkretnie siedzi na porcie, więc zanim przejmiesz konsolę,
+daj znać na kanale zespołu.
+
+Przed rozłączeniem wyloguj się z urządzenia (`exit`, `logout`, `end`), żeby następna
+osoba nie trafiła do Twojej uprzywilejowanej sesji.
+
+Wszystko, co dzieje się na konsolach, jest logowane, łącznie z tym, co wpisujesz
+(także hasła do urządzeń).
 
 ---

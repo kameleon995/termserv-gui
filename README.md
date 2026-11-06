@@ -22,7 +22,7 @@ SSH (`sudo termserv-tui`) or the `termservctl` CLI. All three use the same
 `termserv` Python package, so they validate and behave the same way.
 
 Documentation: [administrator guide](docs/admin-guide.md) ·
-[user manual](docs/user-manual.md) · [welcome email for users](docs/email-template.md)
+[user manual](docs/user-manual.md) · [welcome email (Polish, shared account)](docs/email-template.md)
 
 ![Web UI: port table](docs/screenshots/web-ports.png)
 

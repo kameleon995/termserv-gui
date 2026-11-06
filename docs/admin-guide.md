@@ -2,7 +2,7 @@
 
 This guide is for the person who installs and runs a termserv box. People who only
 connect to consoles need the [user manual](user-manual.md) instead; to onboard them,
-send the [welcome email](email-template.md).
+send the [welcome email](email-template.md) (Polish, for IT admins on a shared account).
 
 - [How it works](#how-it-works)
 - [Requirements](#requirements)
