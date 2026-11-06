@@ -302,3 +302,26 @@ def test_connect_refused_shows_why(store, monkeypatch):
             await pilot.pause()
         assert notes == ["alice may not use port 1"]
     run(go())
+
+
+def test_restart_services_with_confirm(store, monkeypatch):
+    calls = []
+    monkeypatch.setattr(service, "restart_services", lambda s: calls.append(s) or ["restarted conserver"])
+
+    async def go():
+        app = TermservTUI(store, live=False)
+        async with app.run_test(size=(140, 32)) as pilot:
+            await pilot.press("R")
+            await pilot.pause()
+            assert isinstance(app.screen, Confirm)
+            assert "disconnects everyone" in str(app.screen.query_one("#question").render())
+            await pilot.press("escape")
+            await pilot.pause()
+            assert calls == []
+            await pilot.press("R")
+            await pilot.pause()
+            await pilot.click("#yes")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert calls == [store]
+    run(go())

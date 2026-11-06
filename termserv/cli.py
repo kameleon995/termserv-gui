@@ -133,6 +133,11 @@ def cmd_connect(args) -> int:
     return service.connect(cfg, port.number, user)
 
 
+def cmd_restart(args) -> int:
+    _print_log(service.restart_services(_store(args)))
+    return 0
+
+
 # termservctl update is another name for termserv-update (installed by install.sh).
 UPDATE_SCRIPT = "/usr/local/lib/termserv/termserv-update"
 
@@ -209,6 +214,7 @@ def cmd_state(args) -> int:
         "ports": ports,
         "pending": service.pending_changes(store),
         "services": service.services_status(),
+        "restart_warning": service.RESTART_WARNING,
         "next_free": service.next_free_number(cfg),
         "bauds": list(model.BAUDS),
         "parities": list(model.PARITIES),
@@ -273,6 +279,9 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("apply", help="write config and reload services")
     s.add_argument("--no-reload", action="store_true", help="write files only")
     s.set_defaults(func=cmd_apply)
+
+    sub.add_parser("restart", help="restart termserv's services (conserver, sshd, web UI); "
+                   "drops open console sessions and web logins").set_defaults(func=cmd_restart)
 
     s = sub.add_parser("release", help="free one port for local use (e.g. screen) until grab or reboot")
     s.add_argument("number", type=int)

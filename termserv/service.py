@@ -353,6 +353,50 @@ def services_status() -> dict[str, str]:
     return out
 
 
+RESTART_WARNING = ("Restarting the services disconnects everyone on a serial port "
+                   "and logs out everyone in the web UI.")
+
+
+def restart_services(store: Store, web: bool = True) -> list[str]:
+    """Restart termserv's daemons: conserver, then sshd (when a port is enabled),
+    then the web UI (when it is on).
+
+    The web UI is restarted without waiting (--no-block), so a request from the
+    web UI itself can still answer; pass web=False to leave it out and call
+    restart_web() later. Raises ApplyError when something failed to restart.
+    """
+    if not frontends._systemd():
+        raise applymod.ApplyError("systemd is not running here; cannot restart services")
+    cfg = store.load()
+    log: list[str] = []
+    failed: list[str] = []
+    units = [applymod.CONSERVER_SERVICE]
+    if render.sshd_config(cfg, banner_path=str(store.paths.banner)):
+        units.append(applymod.SSHD_SERVICE)
+    else:
+        log.append(f"no ports enabled: {applymod.SSHD_SERVICE} left stopped")
+    for unit in units:
+        r = frontends._systemctl("restart", unit)
+        if r.returncode == 0:
+            log.append(f"restarted {unit}")
+        else:
+            failed.append(f"{unit} failed to restart ({r.stderr.strip() or 'see journalctl -u ' + unit})")
+    if web and cfg.settings.web_enabled:
+        r = restart_web()
+        if r.returncode == 0:
+            log.append(f"restarting {frontends.WEB_SERVICE}")
+        else:
+            failed.append(f"{frontends.WEB_SERVICE} failed to restart ({r.stderr.strip()})")
+    if failed:
+        raise applymod.ApplyError("; ".join(log + failed))
+    return log
+
+
+def restart_web() -> subprocess.CompletedProcess:
+    """Queue a restart of the web UI and return at once."""
+    return frontends._systemctl("--no-block", "restart", frontends.WEB_SERVICE)
+
+
 # --- users -----------------------------------------------------------------
 
 @dataclass

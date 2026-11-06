@@ -55,6 +55,7 @@ td.actions form { margin: 0; display: inline; }
 .state-released { color: var(--accent); border-color: var(--accent); }
 .empty { padding: 32px; text-align: center; background: var(--panel); border: 1px dashed var(--line); border-radius: 8px; }
 .services { margin-top: 24px; }
+.services form.restart { margin-top: 12px; }
 .services ul { list-style: none; padding: 0; margin: 0; display: flex; gap: 6px 24px; flex-wrap: wrap; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--muted); }
 .dot.good { background: var(--good); } .dot.bad { background: var(--bad); }

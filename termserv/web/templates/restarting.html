@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block head %}<meta http-equiv="refresh" content="8;url=/login">{% endblock %}
+{% block title %}Restarting · termserv{% endblock %}
+{% block content %}
+<h1>Restarting services</h1>
+<p>{{ log | join('; ') }}{% if log %}; {% endif %}restarting the web UI.</p>
+<p class="muted">You will need to log in again. This page goes to the login page in a few seconds;
+if it does not come back, <a href="/login">reload it</a>.</p>
+{% endblock %}
