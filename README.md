@@ -21,6 +21,9 @@ Manage it from a **web UI** (HTTPS, log in with your Linux account), a **TUI** o
 SSH (`sudo termserv-tui`) or the `termservctl` CLI. All three use the same
 `termserv` Python package, so they validate and behave the same way.
 
+Documentation: [administrator guide](docs/admin-guide.md) ·
+[user manual](docs/user-manual.md) · [welcome email for users](docs/email-template.md)
+
 ![Web UI: port table](docs/screenshots/web-ports.png)
 
 ## Install
