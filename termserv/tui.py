@@ -135,6 +135,7 @@ class PortForm(ArrowNavigation, ModalScreen[bool]):
                 yield Input(", ".join(p.groups), id="groups", placeholder="empty = everyone in the serial group", compact=True)
             yield Checkbox("Enabled", p.enabled, id="enabled", compact=True)
             yield Checkbox("Open only while someone is connected (no logging while idle)", p.ondemand, id="ondemand", compact=True)
+            yield Checkbox("Log console output", p.log, id="log", compact=True)
             yield Static("", id="error", classes="error")
             with Horizontal(classes="buttons"):
                 yield Button("Save", id="save", variant="primary")
@@ -161,6 +162,7 @@ class PortForm(ArrowNavigation, ModalScreen[bool]):
             "groups": self.query_one("#groups", Input).value,
             "enabled": self.query_one("#enabled", Checkbox).value,
             "ondemand": self.query_one("#ondemand", Checkbox).value,
+            "log": self.query_one("#log", Checkbox).value,
         }
         try:
             service.save_port(self.store, data, original_number=self.original)
@@ -226,7 +228,7 @@ class SettingsForm(ArrowNavigation, ModalScreen[list]):
 
 
 class LogScreen(Screen):
-    BINDINGS = [Binding("escape,q", "app.pop_screen", "Back")]
+    BINDINGS = [Binding("escape,q", "app.pop_screen", "Back"), Binding("x", "clear", "Clear log")]
 
     def __init__(self, store: service.Store, number: int) -> None:
         super().__init__()
@@ -244,12 +246,30 @@ class LogScreen(Screen):
         self.set_interval(3, self.refresh_log)
 
     def refresh_log(self) -> None:
-        text = service.log_tail(self.store.load(), self.number) or "(nothing logged yet)"
+        cfg = self.store.load()
+        port = cfg.port(self.number)
+        text = service.log_tail(cfg, self.number) or (
+            "(logging is off for this port)" if port and not port.log else "(nothing logged yet)")
         if text != self.last:
             log = self.query_one(RichLog)
             log.clear()
             log.write(text)
             self.last = text
+
+    def action_clear(self) -> None:
+        def go(yes: bool | None) -> None:
+            if not yes:
+                return
+            try:
+                service.clear_log(self.store.load(), self.number)
+            except model.ConfigError as e:
+                self.notify(str(e), severity="error")
+                return
+            self.notify(f"Port {self.number}'s log cleared")
+            self.refresh_log()
+
+        self.app.push_screen(Confirm(f"Clear port {self.number}'s log? Everything recorded so far, "
+                                     "including rotated copies, is deleted for good."), go)
 
 
 class UsersScreen(Screen):
@@ -375,7 +395,7 @@ class TermservTUI(App):
             device = (f"{v.socket}" + (f" → {v.tty}" if v.tty else "")) if v.socket else p.device_path()
             if not v.device_present and v.state != "disabled":
                 device += "  [red]empty socket[/]" if v.socket else "  [red]missing[/]"
-            line = f"{p.baud} 8{p.parity[0].upper()}1" + (f" {p.flow}" if p.flow != "none" else "") + ("  on demand" if p.ondemand else "")
+            line = f"{p.baud} 8{p.parity[0].upper()}1" + (f" {p.flow}" if p.flow != "none" else "") + ("  on demand" if p.ondemand else "") + ("  no log" if not p.log else "")
             state = f"[{STATE_STYLE.get(v.state, '')}]{v.state}[/]"
             table.add_row(str(p.number), str(v.ssh_port), p.name or "-", device, line,
                           ", ".join(p.groups) or cfg.settings.ssh_group, state, ", ".join(v.users) or "-",

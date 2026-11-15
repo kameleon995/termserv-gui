@@ -122,6 +122,12 @@ Tips:
   instead of `--usb-path`.
 - `--ondemand` opens the device only while someone is connected. The device is free
   the rest of the time, but nothing is logged while nobody is attached.
+- `--no-log` stops recording a port's console output (for a device whose console
+  shows secrets you don't want on disk, say). It is per port and on by default; the
+  form has a **Log console output** checkbox. With it off the log viewers show
+  nothing new and conserver's replay (`Ctrl-E c r`) has nothing to replay. The old
+  `portN.log` is left in place until logrotate removes it; delete it by hand if it
+  must go now. `--log` turns it back on. Apply to make the change live.
 - `--disable` closes the port's SSH port and drops its console without deleting it.
 - The SSH port is always `base_port + number` (2000 + N by default).
 
@@ -176,7 +182,7 @@ certificate is self-signed, so the browser asks once; replace
 `sudo systemctl restart termserv-web` if you like.
 
 - **Ports**: live table (state, who is connected, missing adapters), add, edit,
-  delete, release/grab, per-port log viewer, **Connect** (an `ssh://` link for your
+  delete, release/grab, per-port log viewer with **Clear log**, **Connect** (an `ssh://` link for your
   own terminal) and **Copy ssh**. A banner shows when saved changes are not live yet;
   **Apply changes** activates them.
 - **Restart services** (under the service list) restarts conserver, sshd and the web
@@ -205,7 +211,7 @@ sudo termserv-tui
 | `c` | connect to the selected port's console (`Ctrl-E c .` comes back) |
 | `d` | delete |
 | `r` | release / grab |
-| `l` | console log |
+| `l` | console log (`x` there clears it) |
 | `u` | users |
 | `s` | settings (web UI and Cockpit on/off, timeouts, lockout) |
 | `p` | apply changes |
@@ -247,6 +253,19 @@ sudo less /var/log/conserver/port1.log    # whole log, timestamped hourly and on
 
 Logs record everything typed and printed, including passwords typed at the device, so
 only root and `adm` can read them. The distro's logrotate job rotates them.
+Ports with logging turned off (`--no-log`) are not recorded.
+
+**Clear a console log**
+
+```sh
+sudo termservctl clear-log 1              # asks first; --yes skips the question
+```
+
+This empties `port1.log` and deletes its rotated copies (`port1.log.1`,
+`port1.log.2.gz`, ...). It cannot be undone. The live file is truncated rather than
+deleted, so conserver keeps writing to it and nothing needs restarting. The web UI,
+TUI (`x` in the log view) and Cockpit have the same **Clear log** action in the log
+view, with a confirmation.
 
 **Use a port locally (cable test, firmware flash)**
 
@@ -415,6 +434,7 @@ ports:
 | `groups` | list of groups | restrict the port to these groups (default: `ssh_group`) |
 | `enabled` | `true` / `false` | `false` closes the SSH port and drops the console |
 | `ondemand` | `true` / `false` | open the device only while someone is connected (no logging otherwise) |
+| `log` | `true` (default) / `false` | `false` records nothing to `log_dir/portN.log` for this port |
 
 Prefer editing through the tools; they validate before saving. If you edit the file by
 hand, run `sudo termservctl check` and then `sudo termservctl apply`.
@@ -426,6 +446,7 @@ termservctl list [--status]                     show ports (and who is connected
 termservctl set N [options]                     add or change a port
     --name NAME --device DEV --usb-path PATH --baud B --parity none|even|odd
     --flow none|xonxoff|rtscts --groups g1,g2 --enable|--disable --ondemand|--no-ondemand
+    --log|--no-log
 termservctl remove N                            delete a port
 termservctl apply [--no-reload]                 validate, write config, reload services
 termservctl check                               validate and syntax-check without changing anything
@@ -440,6 +461,7 @@ termservctl web enable|disable|status           built-in web UI on/off
 termservctl cockpit enable|disable|status       Cockpit plugin on/off
 termservctl settings [--web-idle-minutes N] [--web-max-failures N] [--web-lockout-minutes N]
 termservctl log N                               end of a port's console log
+termservctl clear-log N [--yes]                 empty a port's log and delete its rotated copies
 termservctl state | save-port                   JSON interface used by the Cockpit plugin
 ```
 

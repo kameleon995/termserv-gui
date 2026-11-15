@@ -17,7 +17,7 @@
         {% else %}<code>{{ v.port.device_path() }}</code>{% endif %}
         {% if not v.device_present and v.state != 'disabled' %}<span class="badge bad" title="Device file not found: adapter unplugged or wrong USB socket">{{ 'empty socket' if v.socket else 'missing' }}</span>{% endif %}
       </td>
-      <td>{{ v.port.baud }} 8{{ v.port.parity[0] | upper }}1{% if v.port.flow != 'none' %} {{ v.port.flow }}{% endif %}{% if v.port.ondemand %} <span class="badge muted" title="Device is opened only while someone is connected">on demand</span>{% endif %}</td>
+      <td>{{ v.port.baud }} 8{{ v.port.parity[0] | upper }}1{% if v.port.flow != 'none' %} {{ v.port.flow }}{% endif %}{% if v.port.ondemand %} <span class="badge muted" title="Device is opened only while someone is connected">on demand</span>{% endif %}{% if not v.port.log %} <span class="badge muted" title="Console output is not recorded">no log</span>{% endif %}</td>
       <td>{{ v.port.groups | join(', ') if v.port.groups else cfg.settings.ssh_group }}</td>
       <td><span class="badge state-{{ v.state }}">{{ v.state }}</span></td>
       <td>{{ v.users | join(', ') or '—' }}</td>

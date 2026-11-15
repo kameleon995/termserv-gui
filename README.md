@@ -101,12 +101,12 @@ Updates install themselves; nothing in this repository needs to change for a CVE
 | `Ctrl-E c ?` | help |
 
 The first user on a port gets write access; later users watch read-only.
-Logs are in `/var/log/conserver/portN.log`.
+Logs are in `/var/log/conserver/portN.log` (unless logging is turned off for the port).
 
 ## Web UI
 
 - **Ports**: live table (state, who is connected, missing adapters), add, edit,
-  delete, release/grab, per-port log viewer. Edits are saved to `ports.yaml`; a
+  delete, release/grab, per-port log viewer (with Clear log). Edits are saved to `ports.yaml`; a
   banner shows when they are not live yet, and **Apply changes** activates them.
 - **Users**: which Linux accounts are in each access group (`serial` plus any
   per-port groups); click to add or remove. Takes effect on the next SSH login.
@@ -201,6 +201,7 @@ See [examples/ports.yaml](examples/ports.yaml). SSH port = `base_port + number`.
 | `groups` | Linux groups allowed on this port (default: `settings.ssh_group`) |
 | `enabled` | `false` closes the SSH port and drops the console |
 | `ondemand` | `true` opens the device only while someone is connected, so it is free otherwise; nothing is logged while nobody is attached |
+| `log` | `false` stops recording the port's console output to `portN.log` (default `true`); `termservctl set N --no-log` / `--log` |
 
 ## termservctl
 
@@ -221,6 +222,7 @@ termservctl web enable|disable|status       built-in web UI on/off
 termservctl cockpit enable|disable|status   Cockpit plugin on/off
 termservctl settings [--web-idle-minutes N] [--web-max-failures N] [--web-lockout-minutes N]
 termservctl state | save-port | log N       JSON/text interface used by the Cockpit plugin
+termservctl clear-log N [--yes]             empty a port's console log and delete its rotated copies
 ```
 
 ## Tests
